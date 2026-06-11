@@ -9,8 +9,10 @@ import { searchAudiomack } from './api/audiomack'
 import { getArtistInfo } from './api/audiodb'
 import { getLyrics } from './api/lyrics'
 import { searchNex1Music, getIranianCharts } from './api/nex1music'
+import { searchHivefy } from './api/hivefy'
+import { getPersianPodcasts } from './api/persian-podcasts'
 import { getTopSongs, getTopAlbums, getGenreSongs, GENRES } from './api/itunes-charts'
-import type { Track, Album, View, PlayerState, SearchState } from './types'
+import type { Track, Album, Podcast, View, PlayerState, SearchState } from './types'
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds)) return '۰:۰۰';
@@ -24,6 +26,7 @@ function sourceLabel(source: string): string {
     itunes: 'iTunes', jamendo: 'Jamendo', jiosaavn: 'JioSaavn',
     musicapi: 'MusicAPI', audiomack: 'Audiomack', musicbrainz: 'MusicBrainz',
     nex1music: 'موزیک ایرانی',
+    hivefy: 'JioSaavn HD',
   }[source] ?? source;
 }
 
@@ -206,6 +209,51 @@ function fillAlbumRow(row: HTMLElement, albums: Album[]): void {
   });
 }
 
+const PODCAST_GRADIENTS = [
+  ['#7c3aed', '#4f46e5'], ['#db2777', '#9333ea'], ['#ea580c', '#dc2626'],
+  ['#16a34a', '#0284c7'], ['#0891b2', '#7c3aed'], ['#b45309', '#16a34a'],
+];
+
+function podcastGradient(name: string): string {
+  const i = (name.codePointAt(0) ?? 0) % PODCAST_GRADIENTS.length;
+  const [a, b] = PODCAST_GRADIENTS[i];
+  return `linear-gradient(135deg, ${a}, ${b})`;
+}
+
+function renderPodcastCard(pod: Podcast): HTMLElement {
+  const card = el('div', { class: 'podcast-card' });
+
+  const cover = el('div', { class: 'podcast-card__cover' });
+  cover.style.background = podcastGradient(pod.name);
+  const initials = [...pod.name].slice(0, 2).join('');
+  cover.appendChild(el('span', {}, initials));
+
+  const info = el('div', { class: 'podcast-card__info' });
+  info.append(
+    el('p', { class: 'podcast-card__name' }, pod.name),
+    el('p', { class: 'podcast-card__meta' }, `${pod.publisher}${pod.totalEpisodes ? ` · ${pod.totalEpisodes} قسمت` : ''}`),
+  );
+  if (pod.description) {
+    const desc = el('p', { class: 'podcast-card__desc' }, pod.description);
+    info.appendChild(desc);
+  }
+
+  const openBtn = el('a', {
+    class: 'podcast-card__open',
+    href: pod.spotifyUrl,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+  }, 'اسپاتیفای ↗');
+
+  card.append(cover, info, openBtn);
+  return card;
+}
+
+function fillPodcastRow(row: HTMLElement, podcasts: Podcast[]): void {
+  row.innerHTML = '';
+  podcasts.forEach(p => row.appendChild(renderPodcastCard(p)));
+}
+
 function renderQuickGrid(songs: Track[]): HTMLElement {
   const grid = el('div', { class: 'quick-grid' });
   songs.slice(0, 6).forEach(t => {
@@ -286,7 +334,19 @@ function renderHomeView(): HTMLElement {
     searchNex1Music('ایرانی').then(r => store.setSearchResults('موزیک ایرانی', r)).catch(() => store.setSearchError('خطا'));
   });
 
-  view.append(topSongsSection, artistsSection, topAlbumsSection, iranianSection);
+  // Persian podcasts section
+  const podcastSection = el('section', { class: 'music-section' });
+  const podcastHeader = el('div', { class: 'section-header' });
+  podcastHeader.appendChild(el('h2', {}, 'پادکست‌های فارسی'));
+  const podcastRow = el('div', { class: 'scroll-row' });
+  for (let i = 0; i < 5; i++) {
+    const sk = el('div', { class: 'scroll-card-skeleton' });
+    sk.append(makeSkeleton('skeleton--img'), makeSkeleton('skeleton--title'), makeSkeleton('skeleton--sub'));
+    podcastRow.appendChild(sk);
+  }
+  podcastSection.append(podcastHeader, podcastRow);
+
+  view.append(topSongsSection, artistsSection, topAlbumsSection, iranianSection, podcastSection);
   view.appendChild(renderGenresSection());
 
   // Load chart data
@@ -307,6 +367,13 @@ function renderHomeView(): HTMLElement {
     .then(tracks => fillTrackRow(iranianRow, tracks))
     .catch(() => {
       iranianRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
+    });
+
+  // Persian podcasts (CSV from GitHub)
+  getPersianPodcasts(20)
+    .then(pods => fillPodcastRow(podcastRow, pods))
+    .catch(() => {
+      podcastRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
     });
 
   return view;
@@ -576,6 +643,7 @@ async function performSearch(query: string): Promise<void> {
   if (enabledSources.musicapi) promises.push(searchMusicApi(query).catch(() => []));
   if (enabledSources.musicbrainz) promises.push(searchMusicBrainz(query, jiosaavnUrl).catch(() => []));
   if (enabledSources.nex1music) promises.push(searchNex1Music(query).catch(() => []));
+  if (enabledSources.hivefy) promises.push(searchHivefy(query).catch(() => []));
   if (enabledSources.audiomack && audiomackKey && audiomackSecret) {
     promises.push(searchAudiomack(query, audiomackKey, audiomackSecret).catch(() => []));
   }
@@ -710,6 +778,10 @@ function renderSettings(): HTMLElement {
           <span class="source-toggle__dot" style="background:#ec4899"></span>
           <span class="source-toggle__label">MusicAPI</span>
         </label>
+        <label class="source-toggle"><input type="checkbox" id="src-hivefy" ${settings.enabledSources.hivefy ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#f59e0b"></span>
+          <span class="source-toggle__label">JioSaavn HD</span>
+        </label>
         <label class="source-toggle"><input type="checkbox" id="src-audiomack" ${settings.enabledSources.audiomack ? 'checked' : ''}/>
           <span class="source-toggle__dot" style="background:#ffa500"></span>
           <span class="source-toggle__label">Audiomack</span>
@@ -748,6 +820,7 @@ function renderSettings(): HTMLElement {
         musicbrainz: (modal.querySelector('#src-musicbrainz') as HTMLInputElement).checked,
         audiomack: (modal.querySelector('#src-audiomack') as HTMLInputElement).checked,
         nex1music: (modal.querySelector('#src-nex1music') as HTMLInputElement).checked,
+        hivefy: (modal.querySelector('#src-hivefy') as HTMLInputElement).checked,
       },
     });
     store.setShowSettings(false);

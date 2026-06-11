@@ -1,4 +1,4 @@
-export type Source = 'itunes' | 'jamendo' | 'jiosaavn' | 'musicapi' | 'audiomack' | 'musicbrainz' | 'nex1music';
+export type Source = 'itunes' | 'jamendo' | 'jiosaavn' | 'musicapi' | 'audiomack' | 'musicbrainz' | 'nex1music' | 'hivefy';
 
 export interface Track {
   id: string;
@@ -51,6 +51,15 @@ export interface Album {
   imageUrl: string;
   genre?: string;
   year?: number;
+}
+
+export interface Podcast {
+  id: string;
+  name: string;
+  publisher: string;
+  description: string;
+  totalEpisodes: number;
+  spotifyUrl: string;
 }
 
 export type View = 'home' | 'search' | 'favorites';

@@ -37,6 +37,7 @@ function loadSettings(): Settings {
       musicbrainz: true,
       audiomack: false,
       nex1music: true,
+      hivefy: true,
     },
   };
   try {

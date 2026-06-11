@@ -614,6 +614,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .source-tag--musicapi { background: rgba(236,72,153,0.15); color: #ec4899; }
 .source-tag--audiomack { background: rgba(255,165,0,0.15); color: #ffa500; }
 .source-tag--musicbrainz { background: rgba(186,85,211,0.15); color: #ba55d3; }
+.source-tag--nex1music { background: rgba(16,185,129,0.15); color: #10b981; }
 
 /* ── Buttons ── */
 .btn-icon {
@@ -1105,6 +1106,92 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 
 .badge--free { background: rgba(34,197,94,0.15); color: #22c55e; }
 .badge--key { background: rgba(249,115,22,0.15); color: #f97316; }
+
+/* ── Source Toggles Grid ── */
+.sources-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.source-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+
+.source-toggle:has(input:checked) {
+  background: rgba(139,92,246,0.1);
+  border-color: var(--accent);
+}
+
+.source-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.source-toggle__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.source-toggle:has(input:checked) .source-toggle__dot { opacity: 1; }
+
+.source-toggle__label { font-size: 13px; font-weight: 500; }
+
+/* ── Advanced Settings ── */
+.settings-advanced {
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.settings-advanced summary {
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-advanced summary::before {
+  content: '›';
+  font-size: 16px;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.settings-advanced[open] summary::before { transform: rotate(90deg); }
+
+.settings-adv-body {
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-adv-label {
+  font-size: 12px;
+  color: var(--text3);
+  margin-bottom: 4px;
+  display: block;
+}
 
 /* ── View Header ── */
 .view-header__sub {

@@ -36,6 +36,7 @@ function loadSettings(): Settings {
       musicapi: true,
       musicbrainz: true,
       audiomack: false,
+      nex1music: true,
     },
   };
   try {

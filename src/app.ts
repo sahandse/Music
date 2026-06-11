@@ -8,6 +8,7 @@ import { searchMusicBrainz } from './api/musicbrainz'
 import { searchAudiomack } from './api/audiomack'
 import { getArtistInfo } from './api/audiodb'
 import { getLyrics } from './api/lyrics'
+import { searchNex1Music, getIranianCharts } from './api/nex1music'
 import { getTopSongs, getTopAlbums, getGenreSongs, GENRES } from './api/itunes-charts'
 import type { Track, Album, View, PlayerState, SearchState } from './types'
 
@@ -22,6 +23,7 @@ function sourceLabel(source: string): string {
   return {
     itunes: 'iTunes', jamendo: 'Jamendo', jiosaavn: 'JioSaavn',
     musicapi: 'MusicAPI', audiomack: 'Audiomack', musicbrainz: 'MusicBrainz',
+    nex1music: 'موزیک ایرانی',
   }[source] ?? source;
 }
 
@@ -277,24 +279,34 @@ function renderHomeView(): HTMLElement {
     searchItunes('top albums').then(r => store.setSearchResults('بهترین آلبوم‌ها', r));
   });
 
-  view.append(topSongsSection, artistsSection, topAlbumsSection);
+  // Iranian music section
+  const { section: iranianSection, row: iranianRow } = renderSection('موزیک ایرانی برتر', () => {
+    store.setSearchLoading(true);
+    store.setView('search');
+    searchNex1Music('ایرانی').then(r => store.setSearchResults('موزیک ایرانی', r)).catch(() => store.setSearchError('خطا'));
+  });
+
+  view.append(topSongsSection, artistsSection, topAlbumsSection, iranianSection);
   view.appendChild(renderGenresSection());
 
   // Load chart data
   Promise.all([getTopSongs(20), getTopAlbums(20)])
     .then(([songs, albums]) => {
-      // Quick access grid
       const quickGrid = renderQuickGrid(songs);
       view.replaceChild(quickGrid, quickPlaceholder);
-      // Top songs
       fillTrackRow(topSongsRow, songs);
-      // Artists (extracted from songs)
       fillArtistRow(artistsRow, songs);
-      // Albums
       fillAlbumRow(topAlbumsRow, albums);
     })
     .catch(() => {
       topSongsRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
+    });
+
+  // Iranian charts (loads independently — uses CORS proxy, may be slower)
+  getIranianCharts()
+    .then(tracks => fillTrackRow(iranianRow, tracks))
+    .catch(() => {
+      iranianRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
     });
 
   return view;
@@ -563,6 +575,7 @@ async function performSearch(query: string): Promise<void> {
   if (enabledSources.jiosaavn) promises.push(searchJioSaavn(query, jiosaavnUrl).catch(() => []));
   if (enabledSources.musicapi) promises.push(searchMusicApi(query).catch(() => []));
   if (enabledSources.musicbrainz) promises.push(searchMusicBrainz(query, jiosaavnUrl).catch(() => []));
+  if (enabledSources.nex1music) promises.push(searchNex1Music(query).catch(() => []));
   if (enabledSources.audiomack && audiomackKey && audiomackSecret) {
     promises.push(searchAudiomack(query, audiomackKey, audiomackSecret).catch(() => []));
   }
@@ -671,33 +684,51 @@ function renderSettings(): HTMLElement {
       </button>
     </div>
     <div class="settings-section">
-      <h3>منابع API</h3>
-      <p class="settings-hint">منابع موسیقی را فعال یا غیرفعال کنید.</p>
-      <label class="toggle-row"><span>iTunes <span class="badge badge--free">رایگان · بدون کلید</span></span><input type="checkbox" id="src-itunes" ${settings.enabledSources.itunes ? 'checked' : ''}/></label>
-      <label class="toggle-row"><span>Jamendo <span class="badge badge--key">نیاز به کلید</span></span><input type="checkbox" id="src-jamendo" ${settings.enabledSources.jamendo ? 'checked' : ''}/></label>
-      <label class="toggle-row"><span>JioSaavn <span class="badge badge--free">رایگان · بدون کلید</span></span><input type="checkbox" id="src-jiosaavn" ${settings.enabledSources.jiosaavn ? 'checked' : ''}/></label>
-      <label class="toggle-row"><span>MusicAPI <span class="badge badge--free">رایگان · بدون کلید</span></span><input type="checkbox" id="src-musicapi" ${settings.enabledSources.musicapi ? 'checked' : ''}/></label>
-      <label class="toggle-row"><span>MusicBrainz <span class="badge badge--free">رایگان · بدون کلید</span></span><input type="checkbox" id="src-musicbrainz" ${settings.enabledSources.musicbrainz ? 'checked' : ''}/></label>
-      <label class="toggle-row"><span>Audiomack <span class="badge badge--key">نیاز به کلید</span></span><input type="checkbox" id="src-audiomack" ${settings.enabledSources.audiomack ? 'checked' : ''}/></label>
+      <h3>منابع موسیقی</h3>
+      <div class="sources-grid">
+        <label class="source-toggle"><input type="checkbox" id="src-itunes" ${settings.enabledSources.itunes ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#1da1f2"></span>
+          <span class="source-toggle__label">iTunes</span>
+        </label>
+        <label class="source-toggle"><input type="checkbox" id="src-jiosaavn" ${settings.enabledSources.jiosaavn ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#f97316"></span>
+          <span class="source-toggle__label">JioSaavn</span>
+        </label>
+        <label class="source-toggle"><input type="checkbox" id="src-nex1music" ${settings.enabledSources.nex1music ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#10b981"></span>
+          <span class="source-toggle__label">موزیک ایرانی</span>
+        </label>
+        <label class="source-toggle"><input type="checkbox" id="src-musicbrainz" ${settings.enabledSources.musicbrainz ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#ba55d3"></span>
+          <span class="source-toggle__label">MusicBrainz</span>
+        </label>
+        <label class="source-toggle"><input type="checkbox" id="src-jamendo" ${settings.enabledSources.jamendo ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#22c55e"></span>
+          <span class="source-toggle__label">Jamendo</span>
+        </label>
+        <label class="source-toggle"><input type="checkbox" id="src-musicapi" ${settings.enabledSources.musicapi ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#ec4899"></span>
+          <span class="source-toggle__label">MusicAPI</span>
+        </label>
+        <label class="source-toggle"><input type="checkbox" id="src-audiomack" ${settings.enabledSources.audiomack ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#ffa500"></span>
+          <span class="source-toggle__label">Audiomack</span>
+        </label>
+      </div>
     </div>
-    <div class="settings-section">
-      <h3>کلید API جامندو</h3>
-      <p class="settings-hint">کلید رایگان از <a href="https://devportal.jamendo.com" target="_blank" rel="noopener">devportal.jamendo.com</a></p>
-      <input class="settings-input" type="text" id="jamendo-key" placeholder="client_id جامندو" value="${settings.jamendoClientId}"/>
-    </div>
-    <div class="settings-section">
-      <h3>آدرس API جیوساوان</h3>
-      <p class="settings-hint">پیش‌فرض: https://saavn.sumit.co</p>
-      <input class="settings-input" type="url" id="jiosaavn-url" placeholder="https://saavn.sumit.co" value="${settings.jiosaavnUrl}"/>
-    </div>
-    <div class="settings-section">
-      <h3>کلیدهای API آدیوماک</h3>
-      <p class="settings-hint">از <a href="https://audiomack.com/developers" target="_blank" rel="noopener">audiomack.com/developers</a> دریافت کنید</p>
-      <input class="settings-input" type="text" id="audiomack-key" placeholder="Consumer Key" value="${settings.audiomackKey}" style="margin-bottom:8px"/>
-      <input class="settings-input" type="password" id="audiomack-secret" placeholder="Consumer Secret" value="${settings.audiomackSecret}"/>
-    </div>
+    <details class="settings-advanced">
+      <summary>تنظیمات پیشرفته</summary>
+      <div class="settings-adv-body">
+        <label class="settings-adv-label">آدرس JioSaavn API</label>
+        <input class="settings-input" type="url" id="jiosaavn-url" placeholder="https://saavn.sumit.co" value="${settings.jiosaavnUrl}"/>
+        <label class="settings-adv-label" style="margin-top:12px">Audiomack Consumer Key</label>
+        <input class="settings-input" type="text" id="audiomack-key" placeholder="Consumer Key" value="${settings.audiomackKey}"/>
+        <label class="settings-adv-label" style="margin-top:8px">Audiomack Consumer Secret</label>
+        <input class="settings-input" type="password" id="audiomack-secret" placeholder="Consumer Secret" value="${settings.audiomackSecret}"/>
+      </div>
+    </details>
     <div class="settings-footer">
-      <button class="btn-primary" id="save-settings">ذخیره تنظیمات</button>
+      <button class="btn-primary" id="save-settings">ذخیره</button>
     </div>`;
   overlay.appendChild(modal);
   overlay.addEventListener('click', e => { if (e.target === overlay) store.setShowSettings(false); });
@@ -705,7 +736,7 @@ function renderSettings(): HTMLElement {
   modal.querySelector('#close-settings')!.addEventListener('click', () => store.setShowSettings(false));
   modal.querySelector('#save-settings')!.addEventListener('click', () => {
     store.saveSettings({
-      jamendoClientId: (modal.querySelector('#jamendo-key') as HTMLInputElement).value.trim(),
+      jamendoClientId: store.getState().settings.jamendoClientId,
       jiosaavnUrl: (modal.querySelector('#jiosaavn-url') as HTMLInputElement).value.trim() || 'https://saavn.sumit.co',
       audiomackKey: (modal.querySelector('#audiomack-key') as HTMLInputElement).value.trim(),
       audiomackSecret: (modal.querySelector('#audiomack-secret') as HTMLInputElement).value.trim(),
@@ -716,6 +747,7 @@ function renderSettings(): HTMLElement {
         musicapi: (modal.querySelector('#src-musicapi') as HTMLInputElement).checked,
         musicbrainz: (modal.querySelector('#src-musicbrainz') as HTMLInputElement).checked,
         audiomack: (modal.querySelector('#src-audiomack') as HTMLInputElement).checked,
+        nex1music: (modal.querySelector('#src-nex1music') as HTMLInputElement).checked,
       },
     });
     store.setShowSettings(false);

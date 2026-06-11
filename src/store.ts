@@ -39,6 +39,7 @@ function loadSettings(): Settings {
       nex1music: true,
       hivefy: true,
       majidapi: true,
+      deezer: true,
     },
   };
   try {

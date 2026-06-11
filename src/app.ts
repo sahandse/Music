@@ -11,6 +11,7 @@ import { getLyrics } from './api/lyrics'
 import { searchNex1Music, getIranianCharts } from './api/nex1music'
 import { searchHivefy } from './api/hivefy'
 import { searchMajidApi, getNewestIranianTracks } from './api/majidapi'
+import { searchDeezer, getDeezerIranianCharts } from './api/deezer'
 import { getPersianPodcasts } from './api/persian-podcasts'
 import { getTopSongs, getTopAlbums, getGenreSongs, GENRES } from './api/itunes-charts'
 import type { Track, Album, Podcast, View, PlayerState, SearchState } from './types'
@@ -29,6 +30,7 @@ function sourceLabel(source: string): string {
     nex1music: 'موزیک ایرانی',
     hivefy: 'JioSaavn HD',
     majidapi: 'مجید API',
+    deezer: 'Deezer',
   }[source] ?? source;
 }
 
@@ -364,8 +366,9 @@ function renderHomeView(): HTMLElement {
       topSongsRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
     });
 
-  // Iranian charts — MajidAPI first (has token), fall back to nex1music via proxy
+  // Iranian charts — MajidAPI first, then Deezer, then nex1music fallback
   getNewestIranianTracks()
+    .then(tracks => tracks.length ? tracks : getDeezerIranianCharts())
     .then(tracks => tracks.length ? tracks : getIranianCharts())
     .then(tracks => fillTrackRow(iranianRow, tracks))
     .catch(() => {
@@ -648,6 +651,7 @@ async function performSearch(query: string): Promise<void> {
   if (enabledSources.nex1music) promises.push(searchNex1Music(query).catch(() => []));
   if (enabledSources.hivefy) promises.push(searchHivefy(query).catch(() => []));
   if (enabledSources.majidapi) promises.push(searchMajidApi(query).catch(() => []));
+  if (enabledSources.deezer) promises.push(searchDeezer(query).catch(() => []));
   if (enabledSources.audiomack && audiomackKey && audiomackSecret) {
     promises.push(searchAudiomack(query, audiomackKey, audiomackSecret).catch(() => []));
   }
@@ -790,6 +794,10 @@ function renderSettings(): HTMLElement {
           <span class="source-toggle__dot" style="background:#ef4444"></span>
           <span class="source-toggle__label">مجید API</span>
         </label>
+        <label class="source-toggle"><input type="checkbox" id="src-deezer" ${settings.enabledSources.deezer ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#a238ff"></span>
+          <span class="source-toggle__label">Deezer</span>
+        </label>
         <label class="source-toggle"><input type="checkbox" id="src-audiomack" ${settings.enabledSources.audiomack ? 'checked' : ''}/>
           <span class="source-toggle__dot" style="background:#ffa500"></span>
           <span class="source-toggle__label">Audiomack</span>
@@ -830,6 +838,7 @@ function renderSettings(): HTMLElement {
         nex1music: (modal.querySelector('#src-nex1music') as HTMLInputElement).checked,
         hivefy: (modal.querySelector('#src-hivefy') as HTMLInputElement).checked,
         majidapi: (modal.querySelector('#src-majidapi') as HTMLInputElement).checked,
+        deezer: (modal.querySelector('#src-deezer') as HTMLInputElement).checked,
       },
     });
     store.setShowSettings(false);

@@ -749,6 +749,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .source-tag--nex1music { background: rgba(16,185,129,0.15); color: #10b981; }
 .source-tag--hivefy { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .source-tag--majidapi { background: rgba(239,68,68,0.15); color: #ef4444; }
+.source-tag--deezer { background: rgba(162,56,255,0.15); color: #a238ff; }
 
 /* ── Buttons ── */
 .btn-icon {

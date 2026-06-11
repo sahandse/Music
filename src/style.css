@@ -1,19 +1,21 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0d0d0f;
-  --bg2: #131318;
-  --surface: rgba(255, 255, 255, 0.05);
-  --surface2: rgba(255, 255, 255, 0.08);
-  --border: rgba(255, 255, 255, 0.08);
-  --accent: #8b5cf6;
-  --accent-hover: #7c3aed;
-  --accent-glow: rgba(139, 92, 246, 0.3);
-  --text: #f1f5f9;
-  --text2: #94a3b8;
-  --text3: #64748b;
-  --player-h: 90px;
-  --sidebar-w: 240px;
+  --bg: #0c0c0e;
+  --bg2: #161618;
+  --bg3: #1c1c1e;
+  --bg4: #2c2c2e;
+  --surface: rgba(255,255,255,0.05);
+  --surface2: rgba(255,255,255,0.09);
+  --border: rgba(255,255,255,0.08);
+  --accent: #fc3c44;
+  --accent-hover: #ff453a;
+  --accent-glow: rgba(252,60,68,0.28);
+  --text: #f5f5f7;
+  --text2: #aeaeb2;
+  --text3: #636366;
+  --player-h: 88px;
+  --sidebar-w: 220px;
   --radius: 12px;
   --radius-sm: 8px;
   font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -27,10 +29,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
-  grid-template-rows: 1fr var(--player-h);
-  grid-template-areas:
-    "sidebar main"
-    "player  player";
+  grid-template-rows: 1fr;
+  grid-template-areas: "sidebar main";
   height: 100vh;
   height: 100dvh;
 }
@@ -40,8 +40,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   grid-area: sidebar;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 20px 12px;
+  gap: 2px;
+  padding: 16px 10px 16px;
   background: var(--bg2);
   border-right: 1px solid var(--border);
   overflow-y: auto;
@@ -51,43 +51,48 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 8px 20px;
-  font-size: 20px;
-  font-weight: 700;
+  padding: 6px 10px 22px;
+  font-size: 19px;
+  font-weight: 800;
   color: var(--text);
-  letter-spacing: -0.5px;
+  letter-spacing: -0.6px;
 }
+
+.sidebar__logo svg { border-radius: 8px; }
 
 .sidebar__nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   flex: 1;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  gap: 11px;
+  padding: 9px 12px;
+  border-radius: 9px;
   border: none;
   background: transparent;
-  color: var(--text2);
+  color: var(--text3);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.13s, color 0.13s;
   width: 100%;
   text-align: right;
 }
 
-.nav-item:hover { background: var(--surface2); color: var(--text); }
+.nav-item:hover { background: var(--surface2); color: var(--text2); }
 
 .nav-item--active {
-  background: var(--surface2);
-  color: var(--text);
+  background: rgba(252,60,68,0.12);
+  color: var(--accent);
+  font-weight: 600;
 }
+
+.nav-item--active .nav-item__icon { color: var(--accent); }
 
 .nav-item__icon {
   width: 20px;
@@ -108,7 +113,10 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   grid-area: main;
   overflow-y: auto;
   background: var(--bg);
+  transition: padding-bottom 0.35s cubic-bezier(0.4,0,0.2,1);
 }
+
+.main-content--has-player { padding-bottom: var(--player-h); }
 
 .view {
   min-height: 100%;
@@ -117,8 +125,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 
 /* ── Greeting ── */
 .greeting {
-  padding: 32px 32px 8px;
-  background: linear-gradient(180deg, rgba(139,92,246,0.08) 0%, transparent 100%);
+  padding: 36px 32px 12px;
+  background: linear-gradient(180deg, rgba(252,60,68,0.07) 0%, transparent 100%);
 }
 
 .greeting__title {
@@ -190,24 +198,23 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 }
 
 .section-header h2 {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.4px;
 }
 
 .section-see-all {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
   background: none;
   border: none;
   cursor: pointer;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  transition: color 0.15s;
+  transition: opacity 0.15s;
+  opacity: 0.85;
 }
 
-.section-see-all:hover { color: var(--text); }
+.section-see-all:hover { opacity: 1; }
 
 .section-error {
   padding: 16px 0;
@@ -572,35 +579,39 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 }
 
 .tracks-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  padding: 0 32px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 24px 32px;
 }
 
 .favorites-view .tracks-grid { padding: 0 32px 32px; }
 
-/* ── Track Card ── */
+/* ── Track Card — Apple Music list style ── */
 .track-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  transition: background 0.13s;
   cursor: default;
+  overflow: visible;
 }
 
-.track-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  background: var(--surface2);
-}
+.track-card:hover { background: var(--surface2); }
 
 .track-card__img-wrap {
   position: relative;
-  aspect-ratio: 1;
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  border-radius: 7px;
   overflow: hidden;
-  background: #1a1a2e;
+  background: var(--bg3);
+  flex-shrink: 0;
 }
 
 .track-card__img {
@@ -608,10 +619,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.3s;
 }
-
-.track-card:hover .track-card__img { transform: scale(1.05); }
 
 .track-card__play-overlay {
   position: absolute;
@@ -619,55 +627,106 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0,0,0,0.55);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.15s;
   border: none;
   cursor: pointer;
+  border-radius: 7px;
 }
 
 .track-card:hover .track-card__play-overlay { opacity: 1; }
 
 .track-card__play-overlay svg {
-  width: 48px;
-  height: 48px;
+  width: 22px;
+  height: 22px;
   color: #fff;
-  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
 }
 
 .track-card__info {
-  padding: 12px 14px 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
 }
 
 .track-card__title {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text);
-  margin-bottom: 3px;
+  margin-bottom: 2px;
 }
 
 .track-card__artist {
-  font-size: 13px;
-  color: var(--text2);
+  font-size: 12px;
+  color: var(--text3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .track-card__actions {
-  padding: 8px 14px 12px;
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
+  padding: 0;
 }
 
 .track-card__duration {
   font-size: 12px;
   color: var(--text3);
-  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: center;
+}
+
+/* Vertical card style for home-page scroll rows */
+.scroll-item.track-card {
+  display: block;
+  width: 160px;
+  min-width: 160px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0;
+  transition: transform 0.2s, background 0.15s;
+}
+
+.scroll-item.track-card:hover {
+  transform: translateY(-3px);
+  background: var(--surface2);
+}
+
+.scroll-item.track-card .track-card__img-wrap {
+  width: 100%;
+  height: auto;
+  border-radius: 0;
+  aspect-ratio: 1;
+  min-width: unset;
+}
+
+.scroll-item.track-card .track-card__img { transition: transform 0.3s; }
+.scroll-item.track-card:hover .track-card__img { transform: scale(1.04); }
+
+.scroll-item.track-card .track-card__play-overlay {
+  border-radius: 0;
+}
+
+.scroll-item.track-card .track-card__play-overlay svg { width: 44px; height: 44px; }
+
+.scroll-item.track-card .track-card__info {
+  padding: 10px 12px 6px;
+  flex: none;
+}
+
+.scroll-item.track-card .track-card__title { font-weight: 600; }
+
+.scroll-item.track-card .track-card__actions {
+  padding: 4px 12px 10px;
 }
 
 /* ── Source Tags ── */
@@ -756,19 +815,29 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 
 .btn-primary:hover { background: var(--accent-hover); }
 
-/* ── Player Bar ── */
+/* ── Player Bar — fixed, hidden until playing ── */
 .player-bar {
-  grid-area: player;
+  position: fixed;
+  bottom: 0;
+  left: var(--sidebar-w);
+  right: 0;
   display: grid;
   grid-template-columns: minmax(160px, 28%) 1fr minmax(160px, 28%);
   align-items: center;
-  padding: 0 16px;
-  background: #181818;
-  border-top: 1px solid #282828;
+  padding: 0 20px;
+  background: rgba(22,22,24,0.88);
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  border-top: 1px solid rgba(255,255,255,0.07);
   gap: 8px;
   height: var(--player-h);
-  z-index: 100;
+  z-index: 200;
+  /* hidden by default */
+  transform: translateY(100%);
+  transition: transform 0.38s cubic-bezier(0.4,0,0.2,1);
 }
+
+.player-bar--visible { transform: translateY(0); }
 
 /* LEFT — track info */
 .player-bar__left {
@@ -1020,7 +1089,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 /* ── Lyrics Panel ── */
 .lyrics-panel {
   position: fixed;
-  bottom: 90px;
+  bottom: var(--player-h);
   left: 0;
   right: 0;
   width: min(460px, 100%);
@@ -1330,15 +1399,14 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
-  :root { --sidebar-w: 0px; --player-h: 140px; }
+  :root { --sidebar-w: 0px; --player-h: 130px; }
 
   .app {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto var(--player-h);
+    grid-template-rows: 1fr auto;
     grid-template-areas:
       "main"
-      "sidenav"
-      "player";
+      "sidenav";
   }
 
   .sidebar {
@@ -1358,6 +1426,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   .nav-item { padding: 8px 12px; flex-direction: column; gap: 4px; }
 
   .player-bar {
+    left: 0;
     grid-template-columns: 1fr auto;
     grid-template-rows: auto auto;
     padding: 10px 16px;
@@ -1371,10 +1440,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   .player-bar__right { gap: 4px; }
   .pb-volume { width: 70px; }
 
-  .tracks-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    padding: 0 16px 32px;
-  }
+  .tracks-grid { padding: 0 12px 32px; }
 
   .search-header { padding: 16px; }
   .search-results { padding: 0 16px; }

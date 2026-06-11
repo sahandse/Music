@@ -850,6 +850,14 @@ export function initApp(root: HTMLElement): void {
   appEl.append(sidebar, mainContent, playerBar);
   root.appendChild(appEl);
 
+  // Show player bar only when a track is loaded
+  store.on<PlayerState>('player', state => {
+    if (state.currentTrack) {
+      playerBar.classList.add('player-bar--visible');
+      mainContent.classList.add('main-content--has-player');
+    }
+  });
+
   store.on<View>('view', view => {
     mainContent.removeChild(currentViewEl);
     if (view === 'home') currentViewEl = renderHomeView();

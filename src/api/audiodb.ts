@@ -54,3 +54,48 @@ export async function getAlbumsByArtist(artist: string): Promise<Array<{ id: str
     return [];
   }
 }
+
+export interface AudioDBTrack {
+  title: string;
+  artist: string;
+  album: string;
+  imageUrl: string;
+}
+
+export async function getMostLovedTracks(): Promise<AudioDBTrack[]> {
+  try {
+    const resp = await fetch(`${BASE}/mostloved.php?format=track`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (data.loved ?? []).map((t: Record<string, string>) => ({
+      title: t.strTrack ?? '',
+      artist: t.strArtist ?? '',
+      album: t.strAlbum ?? '',
+      imageUrl: t.strTrackThumb ?? '',
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function getPopularAlbums(): Promise<Array<{ id: string; title: string; artist: string; year: string; imageUrl: string; genre: string }>> {
+  try {
+    const resp = await fetch(`${BASE}/popular.php`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (data.album ?? []).map((a: Record<string, string>) => ({
+      id: a.idAlbum ?? '',
+      title: a.strAlbum ?? '',
+      artist: a.strArtist ?? '',
+      year: a.intYearReleased ?? '',
+      imageUrl: a.strAlbumThumb ?? '',
+      genre: a.strGenre ?? '',
+    }));
+  } catch {
+    return [];
+  }
+}

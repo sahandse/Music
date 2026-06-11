@@ -6,7 +6,7 @@ import { searchJioSaavn } from './api/jiosaavn'
 import { searchMusicApi } from './api/musicapi'
 import { searchMusicBrainz } from './api/musicbrainz'
 import { searchAudiomack } from './api/audiomack'
-import { getArtistInfo } from './api/audiodb'
+import { getArtistInfo, getMostLovedTracks, getPopularAlbums } from './api/audiodb'
 import { getLyrics } from './api/lyrics'
 import { searchNex1Music, getIranianCharts } from './api/nex1music'
 import { searchHivefy } from './api/hivefy'
@@ -375,10 +375,29 @@ function renderHomeView(): HTMLElement {
       view.replaceChild(quickGrid, quickPlaceholder);
       fillTrackRow(topSongsRow, songs);
       fillArtistRow(artistsRow, songs); // initial artist list from iTunes
-      fillAlbumRow(topAlbumsRow, albums);
+      if (albums.length > 0) {
+        fillAlbumRow(topAlbumsRow, albums);
+      } else {
+        // Fallback: TheAudioDB popular albums
+        getPopularAlbums().then(adbAlbums => {
+          const converted = adbAlbums.map(a => ({
+            id: a.id, title: a.title, artist: a.artist,
+            imageUrl: a.imageUrl, genre: a.genre, year: a.year ? Number(a.year) : undefined,
+          }));
+          fillAlbumRow(topAlbumsRow, converted);
+        }).catch(() => {});
+      }
     })
     .catch(() => {
       topSongsRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
+      // Still try TheAudioDB albums
+      getPopularAlbums().then(adbAlbums => {
+        const converted = adbAlbums.map(a => ({
+          id: a.id, title: a.title, artist: a.artist,
+          imageUrl: a.imageUrl, genre: a.genre, year: a.year ? Number(a.year) : undefined,
+        }));
+        fillAlbumRow(topAlbumsRow, converted);
+      }).catch(() => {});
     });
 
   // Upgrade artists section with real ListenBrainz weekly top artists
@@ -944,10 +963,20 @@ export function initApp(root: HTMLElement): void {
   const sidebar = renderSidebar('home');
   const playerBar = renderPlayerBar();
 
+  // Back button — visible on all views except home
+  const topBar = el('div', { class: 'main-topbar main-topbar--hidden' });
+  const backBtn = el('button', { class: 'main-topbar__back', 'aria-label': 'بازگشت' });
+  backBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`;
+  backBtn.addEventListener('click', () => store.setView('home'));
+  const topBarTitle = el('span', { class: 'main-topbar__title' }, '');
+  topBar.append(backBtn, topBarTitle);
+
   let currentViewEl: HTMLElement = renderHomeView();
-  mainContent.appendChild(currentViewEl);
+  mainContent.append(topBar, currentViewEl);
   appEl.append(sidebar, mainContent, playerBar);
   root.appendChild(appEl);
+
+  const viewTitles: Partial<Record<View, string>> = { search: 'جستجو', favorites: 'علاقه‌مندی‌ها' };
 
   // Show player bar only when a track is loaded
   store.on<PlayerState>('player', state => {
@@ -958,6 +987,8 @@ export function initApp(root: HTMLElement): void {
   });
 
   store.on<View>('view', view => {
+    topBar.classList.toggle('main-topbar--hidden', view === 'home');
+    topBarTitle.textContent = viewTitles[view] ?? '';
     mainContent.removeChild(currentViewEl);
     if (view === 'home') currentViewEl = renderHomeView();
     else if (view === 'search') currentViewEl = renderSearchView();

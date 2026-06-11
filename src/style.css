@@ -8,9 +8,9 @@
   --surface: rgba(255,255,255,0.05);
   --surface2: rgba(255,255,255,0.09);
   --border: rgba(255,255,255,0.08);
-  --accent: #fc3c44;
-  --accent-hover: #ff453a;
-  --accent-glow: rgba(252,60,68,0.28);
+  --accent: #ff6b00;
+  --accent-hover: #ff8326;
+  --accent-glow: rgba(255,107,0,0.28);
   --text: #f5f5f7;
   --text2: #aeaeb2;
   --text3: #636366;
@@ -87,7 +87,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .nav-item:hover { background: var(--surface2); color: var(--text2); }
 
 .nav-item--active {
-  background: rgba(252,60,68,0.12);
+  background: rgba(255,107,0,0.12);
   color: var(--accent);
   font-weight: 600;
 }
@@ -126,7 +126,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 /* ── Greeting ── */
 .greeting {
   padding: 36px 32px 12px;
-  background: linear-gradient(180deg, rgba(252,60,68,0.07) 0%, transparent 100%);
+  background: linear-gradient(180deg, rgba(255,107,0,0.07) 0%, transparent 100%);
 }
 
 .greeting__title {
@@ -686,9 +686,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 /* Vertical card style for home-page scroll rows */
 .scroll-item.track-card {
   display: block;
-  width: 160px;
-  min-width: 160px;
-  border-radius: var(--radius);
+  width: 175px;
+  min-width: 175px;
+  border-radius: 14px;
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -707,6 +707,16 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   border-radius: 0;
   aspect-ratio: 1;
   min-width: unset;
+  overflow: hidden;
+}
+/* Gradient overlay at bottom of card image */
+.scroll-item.track-card .track-card__img-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 45%, rgba(0,0,0,0.72) 100%);
+  pointer-events: none;
+  border-radius: 0;
 }
 
 .scroll-item.track-card .track-card__img { transition: transform 0.3s; }
@@ -818,6 +828,42 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 }
 
 .btn-primary:hover { background: var(--accent-hover); }
+
+/* ── Main Top Bar (back button) ── */
+.main-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 28px 10px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: linear-gradient(180deg, var(--bg) 65%, transparent 100%);
+  pointer-events: none;
+}
+.main-topbar > * { pointer-events: auto; }
+.main-topbar--hidden { display: none; }
+.main-topbar__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  flex-shrink: 0;
+}
+.main-topbar__back:hover { background: rgba(255,255,255,0.16); transform: translateX(-2px); }
+.main-topbar__back svg { width: 20px; height: 20px; }
+.main-topbar__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
 
 /* ── Player Bar — fixed, hidden until playing ── */
 .player-bar {

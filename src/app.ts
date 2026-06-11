@@ -288,48 +288,90 @@ function renderHomeView(): HTMLElement {
 
 // ── Player Bar ────────────────────────────────────────────────────────────────
 
+function iconShuffle(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>`;
+}
+function iconPrev(): string {
+  return `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>`;
+}
+function iconNext(): string {
+  return `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2.5-6 6-4.35v8.7L8.5 12zM16 6h2v12h-2z"/></svg>`;
+}
+function iconPlay(): string {
+  return `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+}
+function iconPause(): string {
+  return `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+}
+function repeatSvg(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`;
+}
+function repeatOneSvg(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="11.5" y="13.5" font-size="5.5" fill="currentColor" stroke="none" font-weight="700">1</text></svg>`;
+}
+function iconVolume(level: number): string {
+  if (level === 0) return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
+  if (level < 40) return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
+}
+
 function renderPlayerBar(): HTMLElement {
   const bar = el('div', { class: 'player-bar' });
 
-  const trackInfo = el('div', { class: 'player-bar__track-info' });
+  // ── LEFT: track info + heart ───────────────────────────────
+  const trackInfo = el('div', { class: 'player-bar__left' });
   const trackImg = el('img', { class: 'player-bar__img', src: '', alt: '' });
-  trackImg.style.display = 'none';
+  trackImg.style.visibility = 'hidden';
   const trackMeta = el('div', { class: 'player-bar__meta' });
-  const trackTitle = el('p', { class: 'player-bar__title' }, 'آهنگی انتخاب نشده');
+  const trackTitle = el('p', { class: 'player-bar__title' }, '');
   const trackArtist = el('p', { class: 'player-bar__artist' }, '');
   trackMeta.append(trackTitle, trackArtist);
-  trackInfo.append(trackImg, trackMeta);
+
+  const heartBtn = el('button', { class: 'pb-btn pb-heart', 'aria-label': 'علاقه‌مند' });
+  heartBtn.innerHTML = heartSvg(false);
+
+  trackInfo.append(trackImg, trackMeta, heartBtn);
+
+  // ── CENTER: controls + progress ────────────────────────────
+  const center = el('div', { class: 'player-bar__center', dir: 'ltr' });
 
   const controls = el('div', { class: 'player-bar__controls' });
-  const shuffleBtn = el('button', { class: 'btn-icon', 'aria-label': 'تصادفی' });
-  shuffleBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>`;
-  const prevBtn = el('button', { class: 'btn-icon btn-icon--md', 'aria-label': 'قبلی' });
-  prevBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>`;
-  const playBtn = el('button', { class: 'btn-play', 'aria-label': 'پخش/مکث' });
-  playBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-  const nextBtn = el('button', { class: 'btn-icon btn-icon--md', 'aria-label': 'بعدی' });
-  nextBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2.5-6 6-4.35v8.7L8.5 12zM16 6h2v12h-2z"/></svg>`;
-  const repeatBtn = el('button', { class: 'btn-icon', 'aria-label': 'تکرار' });
+
+  const shuffleBtn = el('button', { class: 'pb-btn pb-btn--sm', 'aria-label': 'تصادفی' });
+  shuffleBtn.innerHTML = iconShuffle();
+  const prevBtn = el('button', { class: 'pb-btn pb-btn--md', 'aria-label': 'قبلی' });
+  prevBtn.innerHTML = iconPrev();
+  const playBtn = el('button', { class: 'pb-play', 'aria-label': 'پخش/مکث' });
+  playBtn.innerHTML = iconPlay();
+  const nextBtn = el('button', { class: 'pb-btn pb-btn--md', 'aria-label': 'بعدی' });
+  nextBtn.innerHTML = iconNext();
+  const repeatBtn = el('button', { class: 'pb-btn pb-btn--sm', 'aria-label': 'تکرار' });
   repeatBtn.innerHTML = repeatSvg();
+
   controls.append(shuffleBtn, prevBtn, playBtn, nextBtn, repeatBtn);
 
   const progressWrap = el('div', { class: 'player-bar__progress-wrap' });
-  const timeStart = el('span', { class: 'player-bar__time' }, '۰:۰۰');
-  const progressBar = el('input', { class: 'progress-bar', type: 'range', min: '0', max: '100', value: '0' });
-  const timeEnd = el('span', { class: 'player-bar__time' }, '۰:۰۰');
+  const timeStart = el('span', { class: 'pb-time' }, '0:00');
+  const progressBar = el('input', { class: 'pb-progress', type: 'range', min: '0', max: '100', value: '0' });
+  const timeEnd = el('span', { class: 'pb-time' }, '0:00');
   progressWrap.append(timeStart, progressBar, timeEnd);
 
-  const centerSection = el('div', { class: 'player-bar__center' });
-  centerSection.append(controls, progressWrap);
+  center.append(controls, progressWrap);
 
-  const volumeWrap = el('div', { class: 'player-bar__volume' });
-  const volIcon = el('button', { class: 'btn-icon', 'aria-label': 'صدا' });
-  volIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
-  const volumeBar = el('input', { class: 'volume-bar', type: 'range', min: '0', max: '100', value: '70' });
-  volumeWrap.append(volIcon, volumeBar);
+  // ── RIGHT: volume ──────────────────────────────────────────
+  const right = el('div', { class: 'player-bar__right', dir: 'ltr' });
 
-  bar.append(trackInfo, centerSection, volumeWrap);
+  let currentVolume = 70;
+  let isMuted = false;
 
+  const volBtn = el('button', { class: 'pb-btn pb-btn--sm', 'aria-label': 'صدا' });
+  volBtn.innerHTML = iconVolume(currentVolume);
+  const volumeBar = el('input', { class: 'pb-volume', type: 'range', min: '0', max: '100', value: '70' });
+  right.append(volBtn, volumeBar);
+
+  bar.append(trackInfo, center, right);
+
+  // ── Event listeners ────────────────────────────────────────
   playBtn.addEventListener('click', () => player.togglePlay());
   prevBtn.addEventListener('click', () => player.prev());
   nextBtn.addEventListener('click', () => player.next());
@@ -337,50 +379,79 @@ function renderPlayerBar(): HTMLElement {
   shuffleBtn.addEventListener('click', () => {
     const { isShuffle } = store.getState().player;
     store.updatePlayer({ isShuffle: !isShuffle });
-    shuffleBtn.classList.toggle('btn-icon--active', !isShuffle);
+    shuffleBtn.classList.toggle('pb-btn--active', !isShuffle);
   });
 
   repeatBtn.addEventListener('click', () => {
     const { repeatMode } = store.getState().player;
     const modes = ['none', 'all', 'one'] as const;
-    const nextMode = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
-    store.updatePlayer({ repeatMode: nextMode });
-    repeatBtn.classList.toggle('btn-icon--active', nextMode !== 'none');
-    repeatBtn.innerHTML = nextMode === 'one' ? repeatOneSvg() : repeatSvg();
+    const next = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
+    store.updatePlayer({ repeatMode: next });
+    repeatBtn.classList.toggle('pb-btn--active', next !== 'none');
+    repeatBtn.innerHTML = next === 'one' ? repeatOneSvg() : repeatSvg();
   });
 
-  progressBar.addEventListener('input', () => player.seek(Number((progressBar as HTMLInputElement).value)));
-  volumeBar.addEventListener('input', () => player.setVolume(Number((volumeBar as HTMLInputElement).value)));
+  progressBar.addEventListener('input', () => {
+    player.seek(Number((progressBar as HTMLInputElement).value));
+  });
 
+  volumeBar.addEventListener('input', () => {
+    currentVolume = Number((volumeBar as HTMLInputElement).value);
+    isMuted = false;
+    player.setVolume(currentVolume);
+    volBtn.innerHTML = iconVolume(currentVolume);
+  });
+
+  volBtn.addEventListener('click', () => {
+    isMuted = !isMuted;
+    player.setVolume(isMuted ? 0 : currentVolume);
+    volBtn.innerHTML = iconVolume(isMuted ? 0 : currentVolume);
+    volumeBar.style.setProperty('--volume', isMuted ? '0%' : `${currentVolume}%`);
+  });
+
+  heartBtn.addEventListener('click', () => {
+    const { currentTrack } = store.getState().player;
+    if (!currentTrack) return;
+    store.toggleFavorite(currentTrack);
+    const fav = store.isFavorite(currentTrack.id);
+    heartBtn.classList.toggle('pb-heart--active', fav);
+    heartBtn.innerHTML = heartSvg(fav);
+  });
+
+  // ── State sync ─────────────────────────────────────────────
   store.on<PlayerState>('player', state => {
     const { currentTrack, isPlaying, progress, currentTime, duration, volume } = state;
+
     if (currentTrack) {
-      (trackImg as HTMLImageElement).src = currentTrack.imageUrl || '';
-      trackImg.style.display = 'block';
-      (trackImg as HTMLImageElement).onerror = () => { trackImg.style.display = 'none'; };
+      const img = trackImg as HTMLImageElement;
+      img.src = currentTrack.imageUrl || '';
+      img.style.visibility = 'visible';
+      img.onerror = () => { img.style.visibility = 'hidden'; };
       trackTitle.textContent = currentTrack.title;
       trackArtist.textContent = currentTrack.artist;
+      const fav = store.isFavorite(currentTrack.id);
+      heartBtn.classList.toggle('pb-heart--active', fav);
+      heartBtn.innerHTML = heartSvg(fav);
     }
-    playBtn.innerHTML = isPlaying
-      ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`
-      : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-    (progressBar as HTMLInputElement).value = String(Math.round(progress));
+
+    playBtn.innerHTML = isPlaying ? iconPause() : iconPlay();
+
+    const prog = Math.round(progress);
+    (progressBar as HTMLInputElement).value = String(prog);
+    progressBar.style.setProperty('--val', `${prog}%`);
+
     timeStart.textContent = formatTime(currentTime);
     timeEnd.textContent = formatTime(duration);
-    (volumeBar as HTMLInputElement).value = String(Math.round(volume));
-    progressBar.style.setProperty('--progress', `${Math.round(progress)}%`);
-    volumeBar.style.setProperty('--volume', `${Math.round(volume)}%`);
+
+    if (!isMuted) {
+      currentVolume = Math.round(volume);
+      (volumeBar as HTMLInputElement).value = String(currentVolume);
+      volumeBar.style.setProperty('--volume', `${currentVolume}%`);
+      volBtn.innerHTML = iconVolume(currentVolume);
+    }
   });
 
   return bar;
-}
-
-function repeatSvg(): string {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`;
-}
-
-function repeatOneSvg(): string {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="11" y="13.5" font-size="6" fill="currentColor" stroke="none" font-weight="bold">۱</text></svg>`;
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────

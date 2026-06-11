@@ -38,6 +38,7 @@ function loadSettings(): Settings {
       audiomack: false,
       nex1music: true,
       hivefy: true,
+      majidapi: true,
     },
   };
   try {

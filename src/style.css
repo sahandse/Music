@@ -689,6 +689,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .source-tag--musicbrainz { background: rgba(186,85,211,0.15); color: #ba55d3; }
 .source-tag--nex1music { background: rgba(16,185,129,0.15); color: #10b981; }
 .source-tag--hivefy { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.source-tag--majidapi { background: rgba(239,68,68,0.15); color: #ef4444; }
 
 /* ── Buttons ── */
 .btn-icon {

@@ -15,6 +15,7 @@ import { searchDeezer, getDeezerIranianCharts } from './api/deezer'
 import { searchSoundCloud } from './api/soundcloud'
 import { searchSpotify } from './api/spotify'
 import { searchAudius, getTrendingAudius } from './api/audius'
+import { getTopRecordings, getTopArtists } from './api/listenbrainz'
 import { getSyncedLyrics } from './api/lrclib'
 import type { LyricLine } from './api/lrclib'
 import { getPersianPodcasts } from './api/persian-podcasts'
@@ -100,13 +101,12 @@ function renderTrackCard(track: Track): HTMLElement {
   );
 
   const actions = el('div', { class: 'track-card__actions' });
-  const sourceTag = el('span', { class: `source-tag source-tag--${track.source}` }, sourceLabel(track.source));
   const duration = el('span', { class: 'track-card__duration' }, formatTime(track.duration));
   const favBtn = el('button', { class: `btn-icon ${isFav ? 'btn-icon--active' : ''}`, 'aria-label': 'علاقه‌مند' });
   favBtn.innerHTML = heartSvg(isFav);
   const queueBtn = el('button', { class: 'btn-icon', 'aria-label': 'افزودن به صف' });
   queueBtn.innerHTML = queueSvg();
-  actions.append(sourceTag, duration, queueBtn, favBtn);
+  actions.append(duration, queueBtn, favBtn);
 
   card.append(imgWrap, info, actions);
 
@@ -346,11 +346,11 @@ function renderHomeView(): HTMLElement {
     searchNex1Music('ایرانی').then(r => store.setSearchResults('موزیک ایرانی', r)).catch(() => store.setSearchError('خطا'));
   });
 
-  // Global trending (Audius)
-  const { section: trendingSection, row: trendingRow } = renderSection('ترندهای جهانی (Audius)', () => {
+  // Global trending (ListenBrainz top tracks)
+  const { section: trendingSection, row: trendingRow } = renderSection('ترندهای هفته جهانی', () => {
     store.setSearchLoading(true);
     store.setView('search');
-    getTrendingAudius().then(r => store.setSearchResults('ترندهای Audius', r)).catch(() => store.setSearchError('خطا'));
+    getTrendingAudius().then(r => store.setSearchResults('ترندهای جهانی', r)).catch(() => store.setSearchError('خطا'));
   });
 
   // Persian podcasts section
@@ -368,18 +368,30 @@ function renderHomeView(): HTMLElement {
   view.append(topSongsSection, artistsSection, topAlbumsSection, iranianSection, trendingSection, podcastSection);
   view.appendChild(renderGenresSection());
 
-  // Load chart data
+  // Load chart data (iTunes charts for songs/albums/quick-grid)
   Promise.all([getTopSongs(20), getTopAlbums(20)])
     .then(([songs, albums]) => {
       const quickGrid = renderQuickGrid(songs);
       view.replaceChild(quickGrid, quickPlaceholder);
       fillTrackRow(topSongsRow, songs);
-      fillArtistRow(artistsRow, songs);
+      fillArtistRow(artistsRow, songs); // initial artist list from iTunes
       fillAlbumRow(topAlbumsRow, albums);
     })
     .catch(() => {
       topSongsRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
     });
+
+  // Upgrade artists section with real ListenBrainz weekly top artists
+  getTopArtists(20)
+    .then(lbArtists => {
+      if (!lbArtists.length) return;
+      const fakeTracks: Track[] = lbArtists.map((a, i) => ({
+        id: `lb_a_${i}`, title: '', artist: a.name, album: '',
+        duration: 0, imageUrl: '', audioUrl: '', source: 'musicbrainz' as const,
+      }));
+      fillArtistRow(artistsRow, fakeTracks);
+    })
+    .catch(() => {});
 
   // Iranian charts — MajidAPI first, then Deezer, then nex1music fallback
   getNewestIranianTracks()
@@ -390,12 +402,29 @@ function renderHomeView(): HTMLElement {
       iranianRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
     });
 
-  // Audius global trending
-  getTrendingAudius()
-    .then(tracks => fillTrackRow(trendingRow, tracks))
-    .catch(() => {
-      trendingRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
-    });
+  // Trending: ListenBrainz top recordings enriched with JioSaavn audio, fallback to Audius
+  void (async () => {
+    try {
+      const { settings } = store.getState();
+      const top = await getTopRecordings(12);
+      const settled = await Promise.allSettled(
+        top.map(async ({ title, artist }) => {
+          const res = await searchJioSaavn(`${title} ${artist}`, settings.jiosaavnUrl).catch(() => []);
+          if (res.length) return res[0];
+          const it = await searchItunes(`${title} ${artist}`).catch(() => []);
+          return it[0] ?? null;
+        })
+      );
+      const enriched = settled
+        .filter((r): r is PromiseFulfilledResult<Track> => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
+      if (enriched.length > 0) { fillTrackRow(trendingRow, enriched); return; }
+    } catch {}
+    // Fallback to Audius trending
+    getTrendingAudius()
+      .then(tracks => fillTrackRow(trendingRow, tracks))
+      .catch(() => { trendingRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`; });
+  })();
 
   // Persian podcasts (CSV from GitHub)
   getPersianPodcasts(20)

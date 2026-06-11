@@ -29,11 +29,11 @@ function loadSettings(): Settings {
     if (raw) return JSON.parse(raw) as Settings;
   } catch {}
   return {
-    jamendoClientId: '',
-    jiosaavnUrl: 'https://saavn.dev',
+    jamendoClientId: '826afc6b',
+    jiosaavnUrl: 'https://saavn.sumit.co',
     enabledSources: {
       itunes: true,
-      jamendo: false,
+      jamendo: true,
       jiosaavn: true,
       musicapi: true,
     }

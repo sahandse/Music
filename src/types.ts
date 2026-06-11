@@ -1,4 +1,4 @@
-export type Source = 'itunes' | 'jamendo' | 'jiosaavn' | 'musicapi' | 'audiomack' | 'musicbrainz' | 'nex1music' | 'hivefy' | 'majidapi' | 'deezer' | 'soundcloud' | 'spotify';
+export type Source = 'itunes' | 'jamendo' | 'jiosaavn' | 'musicapi' | 'audiomack' | 'musicbrainz' | 'nex1music' | 'hivefy' | 'majidapi' | 'deezer' | 'soundcloud' | 'spotify' | 'audius';
 
 export interface Track {
   id: string;

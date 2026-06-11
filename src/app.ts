@@ -14,6 +14,9 @@ import { searchMajidApi, getNewestIranianTracks } from './api/majidapi'
 import { searchDeezer, getDeezerIranianCharts } from './api/deezer'
 import { searchSoundCloud } from './api/soundcloud'
 import { searchSpotify } from './api/spotify'
+import { searchAudius, getTrendingAudius } from './api/audius'
+import { getSyncedLyrics } from './api/lrclib'
+import type { LyricLine } from './api/lrclib'
 import { getPersianPodcasts } from './api/persian-podcasts'
 import { getTopSongs, getTopAlbums, getGenreSongs, GENRES } from './api/itunes-charts'
 import type { Track, Album, Podcast, View, PlayerState, SearchState } from './types'
@@ -35,6 +38,7 @@ function sourceLabel(source: string): string {
     deezer: 'Deezer',
     soundcloud: 'SoundCloud',
     spotify: 'Spotify',
+    audius: 'Audius',
   }[source] ?? source;
 }
 
@@ -342,6 +346,13 @@ function renderHomeView(): HTMLElement {
     searchNex1Music('ایرانی').then(r => store.setSearchResults('موزیک ایرانی', r)).catch(() => store.setSearchError('خطا'));
   });
 
+  // Global trending (Audius)
+  const { section: trendingSection, row: trendingRow } = renderSection('ترندهای جهانی (Audius)', () => {
+    store.setSearchLoading(true);
+    store.setView('search');
+    getTrendingAudius().then(r => store.setSearchResults('ترندهای Audius', r)).catch(() => store.setSearchError('خطا'));
+  });
+
   // Persian podcasts section
   const podcastSection = el('section', { class: 'music-section' });
   const podcastHeader = el('div', { class: 'section-header' });
@@ -354,7 +365,7 @@ function renderHomeView(): HTMLElement {
   }
   podcastSection.append(podcastHeader, podcastRow);
 
-  view.append(topSongsSection, artistsSection, topAlbumsSection, iranianSection, podcastSection);
+  view.append(topSongsSection, artistsSection, topAlbumsSection, iranianSection, trendingSection, podcastSection);
   view.appendChild(renderGenresSection());
 
   // Load chart data
@@ -377,6 +388,13 @@ function renderHomeView(): HTMLElement {
     .then(tracks => fillTrackRow(iranianRow, tracks))
     .catch(() => {
       iranianRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
+    });
+
+  // Audius global trending
+  getTrendingAudius()
+    .then(tracks => fillTrackRow(trendingRow, tracks))
+    .catch(() => {
+      trendingRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
     });
 
   // Persian podcasts (CSV from GitHub)
@@ -524,19 +542,25 @@ function renderPlayerBar(): HTMLElement {
     heartBtn.innerHTML = heartSvg(fav);
   });
 
-  // ── Lyrics panel ───────────────────────────────────────────
+  // ── Lyrics panel (synced) ───────────────────────────────────
   let lyricsPanel: HTMLElement | null = null;
+  let lyricsUnsub: (() => void) | null = null;
+  let syncedLines: LyricLine[] | null = null;
 
   function closeLyricsPanel(): void {
+    if (lyricsUnsub) { lyricsUnsub(); lyricsUnsub = null; }
+    syncedLines = null;
     if (lyricsPanel) { lyricsPanel.remove(); lyricsPanel = null; }
     lyricsBtn.classList.remove('pb-btn--active');
   }
 
   lyricsBtn.addEventListener('click', () => {
     if (lyricsPanel) { closeLyricsPanel(); return; }
-    const { currentTrack } = store.getState().player;
+    const playerState = store.getState().player;
+    const { currentTrack, currentTime, duration } = playerState;
     if (!currentTrack) return;
     lyricsBtn.classList.add('pb-btn--active');
+
     const panel = el('div', { class: 'lyrics-panel' });
     const header = el('div', { class: 'lyrics-panel__header' });
     const titleWrap = el('div', {});
@@ -553,9 +577,43 @@ function renderPlayerBar(): HTMLElement {
     panel.append(header, body);
     document.body.appendChild(panel);
     lyricsPanel = panel;
-    getLyrics(currentTrack.artist, currentTrack.title).then(text => {
-      body.textContent = text || 'ترانه‌ای یافت نشد.';
-    }).catch(() => { body.textContent = 'ترانه‌ای یافت نشد.'; });
+
+    function applyHighlight(time: number): void {
+      if (!syncedLines) return;
+      const elems = body.querySelectorAll('.lyric-line');
+      let activeIdx = -1;
+      for (let i = 0; i < syncedLines.length; i++) {
+        if (syncedLines[i].time <= time) activeIdx = i;
+      }
+      elems.forEach((line, i) => {
+        const active = i === activeIdx;
+        line.classList.toggle('lyric-line--active', active);
+        if (active) (line as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+
+    getSyncedLyrics(currentTrack.artist, currentTrack.title, Math.round(duration))
+      .then(async result => {
+        if (!lyricsPanel) return;
+        if (Array.isArray(result) && result.length > 0) {
+          syncedLines = result;
+          body.innerHTML = '';
+          result.forEach(line => {
+            body.appendChild(el('p', { class: 'lyric-line' }, line.text || '♪'));
+          });
+          applyHighlight(currentTime);
+          lyricsUnsub = store.on<PlayerState>('player', s => applyHighlight(s.currentTime));
+        } else if (typeof result === 'string' && result) {
+          body.textContent = result;
+        } else {
+          const text = await getLyrics(currentTrack.artist, currentTrack.title).catch(() => null);
+          if (lyricsPanel) body.textContent = text || 'ترانه‌ای یافت نشد.';
+        }
+      })
+      .catch(async () => {
+        const text = await getLyrics(currentTrack.artist, currentTrack.title).catch(() => null);
+        if (lyricsPanel) body.textContent = text || 'ترانه‌ای یافت نشد.';
+      });
   });
 
   // ── State sync ─────────────────────────────────────────────
@@ -656,6 +714,7 @@ async function performSearch(query: string): Promise<void> {
   if (enabledSources.hivefy) promises.push(searchHivefy(query).catch(() => []));
   if (enabledSources.majidapi) promises.push(searchMajidApi(query).catch(() => []));
   if (enabledSources.deezer) promises.push(searchDeezer(query).catch(() => []));
+  if (enabledSources.audius) promises.push(searchAudius(query).catch(() => []));
   if (enabledSources.soundcloud) promises.push(searchSoundCloud(query, settings.soundcloudClientId).catch(() => []));
   if (enabledSources.spotify) promises.push(searchSpotify(query, settings.spotifyClientId, settings.spotifyClientSecret).catch(() => []));
   if (enabledSources.audiomack && audiomackKey && audiomackSecret) {
@@ -776,25 +835,13 @@ function renderSettings(): HTMLElement {
           <span class="source-toggle__dot" style="background:#f97316"></span>
           <span class="source-toggle__label">JioSaavn</span>
         </label>
-        <label class="source-toggle"><input type="checkbox" id="src-nex1music" ${settings.enabledSources.nex1music ? 'checked' : ''}/>
-          <span class="source-toggle__dot" style="background:#10b981"></span>
-          <span class="source-toggle__label">موزیک ایرانی</span>
-        </label>
-        <label class="source-toggle"><input type="checkbox" id="src-musicbrainz" ${settings.enabledSources.musicbrainz ? 'checked' : ''}/>
-          <span class="source-toggle__dot" style="background:#ba55d3"></span>
-          <span class="source-toggle__label">MusicBrainz</span>
-        </label>
-        <label class="source-toggle"><input type="checkbox" id="src-jamendo" ${settings.enabledSources.jamendo ? 'checked' : ''}/>
-          <span class="source-toggle__dot" style="background:#22c55e"></span>
-          <span class="source-toggle__label">Jamendo</span>
-        </label>
-        <label class="source-toggle"><input type="checkbox" id="src-musicapi" ${settings.enabledSources.musicapi ? 'checked' : ''}/>
-          <span class="source-toggle__dot" style="background:#ec4899"></span>
-          <span class="source-toggle__label">MusicAPI</span>
-        </label>
         <label class="source-toggle"><input type="checkbox" id="src-hivefy" ${settings.enabledSources.hivefy ? 'checked' : ''}/>
           <span class="source-toggle__dot" style="background:#f59e0b"></span>
           <span class="source-toggle__label">JioSaavn HD</span>
+        </label>
+        <label class="source-toggle"><input type="checkbox" id="src-nex1music" ${settings.enabledSources.nex1music ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#10b981"></span>
+          <span class="source-toggle__label">موزیک ایرانی</span>
         </label>
         <label class="source-toggle"><input type="checkbox" id="src-majidapi" ${settings.enabledSources.majidapi ? 'checked' : ''}/>
           <span class="source-toggle__dot" style="background:#ef4444"></span>
@@ -804,37 +851,24 @@ function renderSettings(): HTMLElement {
           <span class="source-toggle__dot" style="background:#a238ff"></span>
           <span class="source-toggle__label">Deezer</span>
         </label>
-        <label class="source-toggle"><input type="checkbox" id="src-soundcloud" ${settings.enabledSources.soundcloud ? 'checked' : ''}/>
-          <span class="source-toggle__dot" style="background:#ff5500"></span>
-          <span class="source-toggle__label">SoundCloud</span>
+        <label class="source-toggle"><input type="checkbox" id="src-audius" ${settings.enabledSources.audius ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#cc0fe0"></span>
+          <span class="source-toggle__label">Audius</span>
         </label>
-        <label class="source-toggle"><input type="checkbox" id="src-spotify" ${settings.enabledSources.spotify ? 'checked' : ''}/>
-          <span class="source-toggle__dot" style="background:#1db954"></span>
-          <span class="source-toggle__label">Spotify</span>
+        <label class="source-toggle"><input type="checkbox" id="src-jamendo" ${settings.enabledSources.jamendo ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#22c55e"></span>
+          <span class="source-toggle__label">Jamendo</span>
         </label>
-        <label class="source-toggle"><input type="checkbox" id="src-audiomack" ${settings.enabledSources.audiomack ? 'checked' : ''}/>
-          <span class="source-toggle__dot" style="background:#ffa500"></span>
-          <span class="source-toggle__label">Audiomack</span>
+        <label class="source-toggle"><input type="checkbox" id="src-musicbrainz" ${settings.enabledSources.musicbrainz ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#ba55d3"></span>
+          <span class="source-toggle__label">MusicBrainz</span>
+        </label>
+        <label class="source-toggle"><input type="checkbox" id="src-musicapi" ${settings.enabledSources.musicapi ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#ec4899"></span>
+          <span class="source-toggle__label">MusicAPI</span>
         </label>
       </div>
     </div>
-    <details class="settings-advanced">
-      <summary>تنظیمات پیشرفته</summary>
-      <div class="settings-adv-body">
-        <label class="settings-adv-label">آدرس JioSaavn API</label>
-        <input class="settings-input" type="url" id="jiosaavn-url" placeholder="https://saavn.sumit.co" value="${settings.jiosaavnUrl}"/>
-        <label class="settings-adv-label" style="margin-top:12px">SoundCloud Client ID</label>
-        <input class="settings-input" type="text" id="soundcloud-id" placeholder="Client ID از soundcloud.com/you/apps" value="${settings.soundcloudClientId}"/>
-        <label class="settings-adv-label" style="margin-top:12px">Spotify Client ID</label>
-        <input class="settings-input" type="text" id="spotify-id" placeholder="Client ID از developer.spotify.com" value="${settings.spotifyClientId}"/>
-        <label class="settings-adv-label" style="margin-top:8px">Spotify Client Secret</label>
-        <input class="settings-input" type="password" id="spotify-secret" placeholder="Client Secret" value="${settings.spotifyClientSecret}"/>
-        <label class="settings-adv-label" style="margin-top:12px">Audiomack Consumer Key</label>
-        <input class="settings-input" type="text" id="audiomack-key" placeholder="Consumer Key" value="${settings.audiomackKey}"/>
-        <label class="settings-adv-label" style="margin-top:8px">Audiomack Consumer Secret</label>
-        <input class="settings-input" type="password" id="audiomack-secret" placeholder="Consumer Secret" value="${settings.audiomackSecret}"/>
-      </div>
-    </details>
     <div class="settings-footer">
       <button class="btn-primary" id="save-settings">ذخیره</button>
     </div>`;
@@ -843,27 +877,29 @@ function renderSettings(): HTMLElement {
   overlay.addEventListener('keydown', e => { if (e.key === 'Escape') store.setShowSettings(false); });
   modal.querySelector('#close-settings')!.addEventListener('click', () => store.setShowSettings(false));
   modal.querySelector('#save-settings')!.addEventListener('click', () => {
+    const cur = store.getState().settings;
     store.saveSettings({
-      jamendoClientId: store.getState().settings.jamendoClientId,
-      jiosaavnUrl: (modal.querySelector('#jiosaavn-url') as HTMLInputElement).value.trim() || 'https://saavn.sumit.co',
-      audiomackKey: (modal.querySelector('#audiomack-key') as HTMLInputElement).value.trim(),
-      audiomackSecret: (modal.querySelector('#audiomack-secret') as HTMLInputElement).value.trim(),
-      soundcloudClientId: (modal.querySelector('#soundcloud-id') as HTMLInputElement).value.trim(),
-      spotifyClientId: (modal.querySelector('#spotify-id') as HTMLInputElement).value.trim(),
-      spotifyClientSecret: (modal.querySelector('#spotify-secret') as HTMLInputElement).value.trim(),
+      jamendoClientId: cur.jamendoClientId,
+      jiosaavnUrl: cur.jiosaavnUrl,
+      audiomackKey: cur.audiomackKey,
+      audiomackSecret: cur.audiomackSecret,
+      soundcloudClientId: cur.soundcloudClientId,
+      spotifyClientId: cur.spotifyClientId,
+      spotifyClientSecret: cur.spotifyClientSecret,
       enabledSources: {
         itunes: (modal.querySelector('#src-itunes') as HTMLInputElement).checked,
         jamendo: (modal.querySelector('#src-jamendo') as HTMLInputElement).checked,
         jiosaavn: (modal.querySelector('#src-jiosaavn') as HTMLInputElement).checked,
         musicapi: (modal.querySelector('#src-musicapi') as HTMLInputElement).checked,
         musicbrainz: (modal.querySelector('#src-musicbrainz') as HTMLInputElement).checked,
-        audiomack: (modal.querySelector('#src-audiomack') as HTMLInputElement).checked,
         nex1music: (modal.querySelector('#src-nex1music') as HTMLInputElement).checked,
         hivefy: (modal.querySelector('#src-hivefy') as HTMLInputElement).checked,
         majidapi: (modal.querySelector('#src-majidapi') as HTMLInputElement).checked,
         deezer: (modal.querySelector('#src-deezer') as HTMLInputElement).checked,
-        soundcloud: (modal.querySelector('#src-soundcloud') as HTMLInputElement).checked,
-        spotify: (modal.querySelector('#src-spotify') as HTMLInputElement).checked,
+        audius: (modal.querySelector('#src-audius') as HTMLInputElement).checked,
+        audiomack: cur.enabledSources.audiomack,
+        soundcloud: cur.enabledSources.soundcloud,
+        spotify: cur.enabledSources.spotify,
       },
     });
     store.setShowSettings(false);

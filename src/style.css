@@ -752,6 +752,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .source-tag--deezer { background: rgba(162,56,255,0.15); color: #a238ff; }
 .source-tag--soundcloud { background: rgba(255,85,0,0.15); color: #ff5500; }
 .source-tag--spotify { background: rgba(29,185,84,0.15); color: #1db954; }
+.source-tag--audius { background: rgba(204,15,224,0.15); color: #cc0fe0; }
 
 /* ── Buttons ── */
 .btn-icon {
@@ -1140,6 +1141,21 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   direction: ltr;
   text-align: left;
   flex: 1;
+}
+.lyric-line {
+  padding: 5px 0;
+  color: var(--text3);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  text-align: center;
+  transition: color 0.25s, font-size 0.2s, font-weight 0.2s;
+  cursor: default;
+  white-space: normal;
+}
+.lyric-line--active {
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 600;
 }
 
 .pb-lyrics-btn { transition: color 0.15s; }

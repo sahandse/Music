@@ -45,6 +45,7 @@ function loadSettings(): Settings {
       deezer: true,
       soundcloud: true,
       spotify: true,
+      audius: true,
     },
   };
   try {

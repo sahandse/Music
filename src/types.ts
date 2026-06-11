@@ -42,6 +42,15 @@ export interface Settings {
   enabledSources: Record<Source, boolean>;
 }
 
+export interface Album {
+  id: string;
+  title: string;
+  artist: string;
+  imageUrl: string;
+  genre?: string;
+  year?: number;
+}
+
 export type View = 'home' | 'search' | 'favorites';
 
 export interface AppState {

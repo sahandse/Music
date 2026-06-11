@@ -1,4 +1,5 @@
 import { store } from './store'
+import { searchJioSaavn } from './api/jiosaavn'
 import type { Track } from './types'
 
 class AudioPlayer {
@@ -60,6 +61,37 @@ class AudioPlayer {
     }
   }
 
+  // Search JioSaavn for the full version of an iTunes preview.
+  // Plays the preview immediately and silently swaps to the full song when found.
+  private async upgradeToFullVersion(track: Track): Promise<void> {
+    const { settings } = store.getState();
+    if (!settings.enabledSources.jiosaavn) return;
+    try {
+      const results = await searchJioSaavn(
+        `${track.title} ${track.artist}`,
+        settings.jiosaavnUrl
+      );
+      const { currentTrack } = store.getState().player;
+      if (!currentTrack || currentTrack.id !== track.id) return;
+
+      const titleKey = track.title.toLowerCase().replace(/[^\w\s]/g, '').trim().slice(0, 15);
+      const match = results.find(r => {
+        const rKey = r.title.toLowerCase().replace(/[^\w\s]/g, '').trim();
+        return rKey.includes(titleKey) || titleKey.includes(rKey.slice(0, 15));
+      });
+
+      if (!match?.audioUrl) return;
+
+      const savedTime = this.audio.currentTime;
+      this.audio.src = match.audioUrl;
+      this.audio.currentTime = Math.min(savedTime, 0);
+      this.audio.play().catch(() => {});
+      store.updatePlayer({
+        currentTrack: { ...track, audioUrl: match.audioUrl, source: 'jiosaavn' },
+      });
+    } catch {}
+  }
+
   playTrack(track: Track): void {
     const { queue } = store.getState().player;
     let idx = queue.findIndex(t => t.id === track.id);
@@ -68,6 +100,7 @@ class AudioPlayer {
       store.updatePlayer({ queue: newQueue, queueIndex: newQueue.length - 1, currentTrack: track });
       this.audio.src = track.audioUrl;
       this.audio.play().catch(() => {});
+      if (track.source === 'itunes') void this.upgradeToFullVersion(track);
       return;
     }
     this.playAtIndex(idx);
@@ -80,6 +113,7 @@ class AudioPlayer {
     store.updatePlayer({ currentTrack: track, queueIndex: index });
     this.audio.src = track.audioUrl;
     this.audio.play().catch(() => {});
+    if (track.source === 'itunes') void this.upgradeToFullVersion(track);
   }
 
   togglePlay(): void {

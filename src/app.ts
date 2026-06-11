@@ -4,7 +4,8 @@ import { searchItunes } from './api/itunes'
 import { searchJamendo } from './api/jamendo'
 import { searchJioSaavn } from './api/jiosaavn'
 import { searchMusicApi } from './api/musicapi'
-import type { Track, View, PlayerState, SearchState } from './types'
+import { getTopSongs, getTopAlbums, getGenreSongs, GENRES } from './api/itunes-charts'
+import type { Track, Album, View, PlayerState, SearchState } from './types'
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds)) return '۰:۰۰';
@@ -14,13 +15,15 @@ function formatTime(seconds: number): string {
 }
 
 function sourceLabel(source: string): string {
-  const labels: Record<string, string> = {
-    itunes: 'iTunes',
-    jamendo: 'Jamendo',
-    jiosaavn: 'JioSaavn',
-    musicapi: 'MusicAPI',
-  };
-  return labels[source] || source;
+  return { itunes: 'iTunes', jamendo: 'Jamendo', jiosaavn: 'JioSaavn', musicapi: 'MusicAPI' }[source] ?? source;
+}
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'صبح بخیر';
+  if (h < 17) return 'ظهر بخیر';
+  if (h < 21) return 'عصر بخیر';
+  return 'شب بخیر';
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -31,11 +34,13 @@ function el<K extends keyof HTMLElementTagNameMap>(
   const element = document.createElement(tag);
   Object.entries(attrs).forEach(([k, v]) => {
     if (k === 'class') element.className = v;
-    else if (k.startsWith('data-') || k === 'aria-label' || k === 'type' || k === 'min' || k === 'max' || k === 'value' || k === 'placeholder' || k === 'id' || k === 'autofocus' || k === 'alt' || k === 'src') {
-      element.setAttribute(k, v);
-    } else {
-      (element as unknown as Record<string, string>)[k] = v;
-    }
+    else if (
+      k.startsWith('data-') || k === 'aria-label' || k === 'type' ||
+      k === 'min' || k === 'max' || k === 'value' || k === 'placeholder' ||
+      k === 'id' || k === 'alt' || k === 'src' || k === 'href' ||
+      k === 'target' || k === 'rel' || k === 'style'
+    ) element.setAttribute(k, v);
+    else (element as unknown as Record<string, string>)[k] = v;
   });
   children.forEach(child => {
     if (typeof child === 'string') element.appendChild(document.createTextNode(child));
@@ -44,59 +49,55 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return element;
 }
 
+function fallbackImg(img: HTMLImageElement, text: string, bg = '8B5CF6'): void {
+  img.onerror = () => {
+    img.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(text)}&background=${bg}&color=fff&size=300`;
+    img.onerror = null;
+  };
+}
+
+// ── Track Card ────────────────────────────────────────────────────────────────
+
 function renderTrackCard(track: Track): HTMLElement {
   const isFav = store.isFavorite(track.id);
-
   const card = el('div', { class: 'track-card' });
 
   const imgWrap = el('div', { class: 'track-card__img-wrap' });
   const img = el('img', { class: 'track-card__img', src: track.imageUrl || '', alt: track.title });
-  (img as HTMLImageElement).onerror = () => {
-    (img as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(track.title)}&background=8B5CF6&color=fff&size=300`;
-  };
+  fallbackImg(img as HTMLImageElement, track.title);
   const playOverlay = el('button', { class: 'track-card__play-overlay', 'aria-label': 'پخش' });
   playOverlay.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-  imgWrap.appendChild(img);
-  imgWrap.appendChild(playOverlay);
+  imgWrap.append(img, playOverlay);
 
   const info = el('div', { class: 'track-card__info' });
-  const titleEl = el('p', { class: 'track-card__title' }, track.title);
-  const artistEl = el('p', { class: 'track-card__artist' }, track.artist);
-  info.appendChild(titleEl);
-  info.appendChild(artistEl);
+  info.append(
+    el('p', { class: 'track-card__title' }, track.title),
+    el('p', { class: 'track-card__artist' }, track.artist),
+  );
 
   const actions = el('div', { class: 'track-card__actions' });
   const sourceTag = el('span', { class: `source-tag source-tag--${track.source}` }, sourceLabel(track.source));
   const duration = el('span', { class: 'track-card__duration' }, formatTime(track.duration));
-
   const favBtn = el('button', { class: `btn-icon ${isFav ? 'btn-icon--active' : ''}`, 'aria-label': 'علاقه‌مند' });
-  favBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
-
+  favBtn.innerHTML = heartSvg(isFav);
   const queueBtn = el('button', { class: 'btn-icon', 'aria-label': 'افزودن به صف' });
-  queueBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
+  queueBtn.innerHTML = queueSvg();
+  actions.append(sourceTag, duration, queueBtn, favBtn);
 
-  actions.appendChild(sourceTag);
-  actions.appendChild(duration);
-  actions.appendChild(queueBtn);
-  actions.appendChild(favBtn);
-
-  card.appendChild(imgWrap);
-  card.appendChild(info);
-  card.appendChild(actions);
+  card.append(imgWrap, info, actions);
 
   playOverlay.addEventListener('click', () => player.playTrack(track));
   card.addEventListener('dblclick', () => player.playTrack(track));
 
-  favBtn.addEventListener('click', (e) => {
+  favBtn.addEventListener('click', e => {
     e.stopPropagation();
     store.toggleFavorite(track);
     const nowFav = store.isFavorite(track.id);
     favBtn.className = `btn-icon ${nowFav ? 'btn-icon--active' : ''}`;
-    const svgEl = favBtn.querySelector('svg');
-    if (svgEl) svgEl.setAttribute('fill', nowFav ? 'currentColor' : 'none');
+    favBtn.innerHTML = heartSvg(nowFav);
   });
 
-  queueBtn.addEventListener('click', (e) => {
+  queueBtn.addEventListener('click', e => {
     e.stopPropagation();
     player.addToQueue(track);
     queueBtn.classList.add('btn-icon--flash');
@@ -105,6 +106,187 @@ function renderTrackCard(track: Track): HTMLElement {
 
   return card;
 }
+
+function heartSvg(filled: boolean): string {
+  return `<svg viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+}
+
+function queueSvg(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
+}
+
+// ── Home Page ─────────────────────────────────────────────────────────────────
+
+function makeSkeleton(cls: string): HTMLElement {
+  return el('div', { class: `skeleton ${cls}` });
+}
+
+function renderSection(title: string, seeAllCb?: () => void): { section: HTMLElement; row: HTMLElement } {
+  const section = el('section', { class: 'music-section' });
+  const header = el('div', { class: 'section-header' });
+  header.appendChild(el('h2', {}, title));
+  if (seeAllCb) {
+    const btn = el('button', { class: 'section-see-all' }, 'مشاهده همه');
+    btn.addEventListener('click', seeAllCb);
+    header.appendChild(btn);
+  }
+  const row = el('div', { class: 'scroll-row' });
+  // Skeleton cards while loading
+  for (let i = 0; i < 6; i++) {
+    const skCard = el('div', { class: 'scroll-card-skeleton' });
+    skCard.append(makeSkeleton('skeleton--img'), makeSkeleton('skeleton--title'), makeSkeleton('skeleton--sub'));
+    row.appendChild(skCard);
+  }
+  section.append(header, row);
+  return { section, row };
+}
+
+function fillTrackRow(row: HTMLElement, tracks: Track[]): void {
+  row.innerHTML = '';
+  tracks.forEach(t => {
+    const card = renderTrackCard(t);
+    card.classList.add('scroll-item');
+    row.appendChild(card);
+  });
+}
+
+function fillArtistRow(row: HTMLElement, tracks: Track[]): void {
+  row.innerHTML = '';
+  const seen = new Set<string>();
+  tracks.forEach(t => {
+    if (seen.has(t.artist)) return;
+    seen.add(t.artist);
+    const card = el('div', { class: 'artist-card' });
+    const imgWrap = el('div', { class: 'artist-card__img-wrap' });
+    const img = el('img', { class: 'artist-card__img', src: t.imageUrl || '', alt: t.artist });
+    fallbackImg(img as HTMLImageElement, t.artist, '6D28D9');
+    imgWrap.appendChild(img);
+    card.append(imgWrap, el('p', { class: 'artist-card__name' }, t.artist));
+    if (t.genre) card.appendChild(el('p', { class: 'artist-card__genre' }, t.genre));
+    card.addEventListener('click', () => {
+      store.setSearchLoading(true);
+      store.setView('search');
+      searchItunes(t.artist).then(r => store.setSearchResults(t.artist, r)).catch(() => store.setSearchError('خطا'));
+    });
+    row.appendChild(card);
+  });
+}
+
+function fillAlbumRow(row: HTMLElement, albums: Album[]): void {
+  row.innerHTML = '';
+  albums.forEach(a => {
+    const card = el('div', { class: 'album-card scroll-item' });
+    const img = el('img', { class: 'album-card__img', src: a.imageUrl || '', alt: a.title });
+    fallbackImg(img as HTMLImageElement, a.title, '1E3A5F');
+    const info = el('div', { class: 'album-card__info' });
+    info.append(el('p', { class: 'album-card__title' }, a.title), el('p', { class: 'album-card__artist' }, a.artist));
+    card.append(img, info);
+    card.addEventListener('click', () => {
+      store.setSearchLoading(true);
+      store.setView('search');
+      searchItunes(`${a.title} ${a.artist}`).then(r => store.setSearchResults(a.title, r)).catch(() => store.setSearchError('خطا'));
+    });
+    row.appendChild(card);
+  });
+}
+
+function renderQuickGrid(songs: Track[]): HTMLElement {
+  const grid = el('div', { class: 'quick-grid' });
+  songs.slice(0, 6).forEach(t => {
+    const item = el('div', { class: 'quick-item' });
+    const img = el('img', { class: 'quick-item__img', src: t.imageUrl || '', alt: t.title });
+    fallbackImg(img as HTMLImageElement, t.title);
+    item.append(img, el('span', { class: 'quick-item__name' }, t.title));
+    item.addEventListener('click', () => player.playTrack(t));
+    grid.appendChild(item);
+  });
+  return grid;
+}
+
+function renderQuickGridSkeleton(): HTMLElement {
+  const grid = el('div', { class: 'quick-grid' });
+  for (let i = 0; i < 6; i++) {
+    const item = el('div', { class: 'quick-item quick-item--skeleton' });
+    item.append(makeSkeleton('skeleton--quick-img'), makeSkeleton('skeleton--quick-text'));
+    grid.appendChild(item);
+  }
+  return grid;
+}
+
+function renderGenresSection(): HTMLElement {
+  const section = el('section', { class: 'music-section' });
+  const header = el('div', { class: 'section-header' });
+  header.appendChild(el('h2', {}, 'مرور بر اساس ژانر'));
+  const grid = el('div', { class: 'genres-grid' });
+
+  GENRES.forEach(g => {
+    const card = el('div', { class: 'genre-card' });
+    card.style.background = `linear-gradient(135deg, ${g.color} 0%, ${g.color}99 100%)`;
+    card.appendChild(el('span', { class: 'genre-card__name' }, g.nameFa));
+    card.addEventListener('click', () => {
+      store.setSearchLoading(true);
+      store.setView('search');
+      getGenreSongs(g.id, g.name).then(r => store.setSearchResults(g.nameFa, r)).catch(() => store.setSearchError('خطا'));
+    });
+    grid.appendChild(card);
+  });
+
+  section.append(header, grid);
+  return section;
+}
+
+function renderHomeView(): HTMLElement {
+  const view = el('div', { class: 'view home-view' });
+
+  // Greeting
+  const greetWrap = el('div', { class: 'greeting' });
+  greetWrap.append(
+    el('h1', { class: 'greeting__title' }, greeting()),
+    el('p', { class: 'greeting__sub' }, 'امروز چه می‌شنوید؟'),
+  );
+  view.appendChild(greetWrap);
+
+  // Quick grid skeleton → replaced when data loads
+  const quickPlaceholder = renderQuickGridSkeleton();
+  view.appendChild(quickPlaceholder);
+
+  // Sections with skeletons
+  const { section: topSongsSection, row: topSongsRow } = renderSection('پرطرفدارترین آهنگ‌ها', () => {
+    store.setView('search');
+    getTopSongs(40).then(r => store.setSearchResults('پرطرفدارترین آهنگ‌ها', r));
+  });
+
+  const { section: artistsSection, row: artistsRow } = renderSection('هنرمندان برتر');
+
+  const { section: topAlbumsSection, row: topAlbumsRow } = renderSection('بهترین آلبوم‌ها', () => {
+    store.setView('search');
+    searchItunes('top albums').then(r => store.setSearchResults('بهترین آلبوم‌ها', r));
+  });
+
+  view.append(topSongsSection, artistsSection, topAlbumsSection);
+  view.appendChild(renderGenresSection());
+
+  // Load chart data
+  Promise.all([getTopSongs(20), getTopAlbums(20)])
+    .then(([songs, albums]) => {
+      // Quick access grid
+      const quickGrid = renderQuickGrid(songs);
+      view.replaceChild(quickGrid, quickPlaceholder);
+      // Top songs
+      fillTrackRow(topSongsRow, songs);
+      // Artists (extracted from songs)
+      fillArtistRow(artistsRow, songs);
+      // Albums
+      fillAlbumRow(topAlbumsRow, albums);
+    })
+    .catch(() => {
+      topSongsRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
+    });
+
+  return view;
+}
+
+// ── Player Bar ────────────────────────────────────────────────────────────────
 
 function renderPlayerBar(): HTMLElement {
   const bar = el('div', { class: 'player-bar' });
@@ -115,56 +297,38 @@ function renderPlayerBar(): HTMLElement {
   const trackMeta = el('div', { class: 'player-bar__meta' });
   const trackTitle = el('p', { class: 'player-bar__title' }, 'آهنگی انتخاب نشده');
   const trackArtist = el('p', { class: 'player-bar__artist' }, '');
-  trackMeta.appendChild(trackTitle);
-  trackMeta.appendChild(trackArtist);
-  trackInfo.appendChild(trackImg);
-  trackInfo.appendChild(trackMeta);
+  trackMeta.append(trackTitle, trackArtist);
+  trackInfo.append(trackImg, trackMeta);
 
   const controls = el('div', { class: 'player-bar__controls' });
-
   const shuffleBtn = el('button', { class: 'btn-icon', 'aria-label': 'تصادفی' });
   shuffleBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>`;
-
   const prevBtn = el('button', { class: 'btn-icon btn-icon--md', 'aria-label': 'قبلی' });
   prevBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>`;
-
   const playBtn = el('button', { class: 'btn-play', 'aria-label': 'پخش/مکث' });
   playBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-
   const nextBtn = el('button', { class: 'btn-icon btn-icon--md', 'aria-label': 'بعدی' });
   nextBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm2.5-6 6-4.35v8.7L8.5 12zM16 6h2v12h-2z"/></svg>`;
-
   const repeatBtn = el('button', { class: 'btn-icon', 'aria-label': 'تکرار' });
-  repeatBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`;
-
-  controls.appendChild(shuffleBtn);
-  controls.appendChild(prevBtn);
-  controls.appendChild(playBtn);
-  controls.appendChild(nextBtn);
-  controls.appendChild(repeatBtn);
+  repeatBtn.innerHTML = repeatSvg();
+  controls.append(shuffleBtn, prevBtn, playBtn, nextBtn, repeatBtn);
 
   const progressWrap = el('div', { class: 'player-bar__progress-wrap' });
   const timeStart = el('span', { class: 'player-bar__time' }, '۰:۰۰');
   const progressBar = el('input', { class: 'progress-bar', type: 'range', min: '0', max: '100', value: '0' });
   const timeEnd = el('span', { class: 'player-bar__time' }, '۰:۰۰');
-  progressWrap.appendChild(timeStart);
-  progressWrap.appendChild(progressBar);
-  progressWrap.appendChild(timeEnd);
+  progressWrap.append(timeStart, progressBar, timeEnd);
 
   const centerSection = el('div', { class: 'player-bar__center' });
-  centerSection.appendChild(controls);
-  centerSection.appendChild(progressWrap);
+  centerSection.append(controls, progressWrap);
 
   const volumeWrap = el('div', { class: 'player-bar__volume' });
   const volIcon = el('button', { class: 'btn-icon', 'aria-label': 'صدا' });
   volIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
   const volumeBar = el('input', { class: 'volume-bar', type: 'range', min: '0', max: '100', value: '70' });
-  volumeWrap.appendChild(volIcon);
-  volumeWrap.appendChild(volumeBar);
+  volumeWrap.append(volIcon, volumeBar);
 
-  bar.appendChild(trackInfo);
-  bar.appendChild(centerSection);
-  bar.appendChild(volumeWrap);
+  bar.append(trackInfo, centerSection, volumeWrap);
 
   playBtn.addEventListener('click', () => player.togglePlay());
   prevBtn.addEventListener('click', () => player.prev());
@@ -182,24 +346,14 @@ function renderPlayerBar(): HTMLElement {
     const nextMode = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
     store.updatePlayer({ repeatMode: nextMode });
     repeatBtn.classList.toggle('btn-icon--active', nextMode !== 'none');
-    if (nextMode === 'one') {
-      repeatBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="11" y="13" font-size="6" fill="currentColor" stroke="none">۱</text></svg>`;
-    } else {
-      repeatBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`;
-    }
+    repeatBtn.innerHTML = nextMode === 'one' ? repeatOneSvg() : repeatSvg();
   });
 
-  progressBar.addEventListener('input', () => {
-    player.seek(Number((progressBar as HTMLInputElement).value));
-  });
+  progressBar.addEventListener('input', () => player.seek(Number((progressBar as HTMLInputElement).value)));
+  volumeBar.addEventListener('input', () => player.setVolume(Number((volumeBar as HTMLInputElement).value)));
 
-  volumeBar.addEventListener('input', () => {
-    player.setVolume(Number((volumeBar as HTMLInputElement).value));
-  });
-
-  store.on<PlayerState>('player', (state) => {
+  store.on<PlayerState>('player', state => {
     const { currentTrack, isPlaying, progress, currentTime, duration, volume } = state;
-
     if (currentTrack) {
       (trackImg as HTMLImageElement).src = currentTrack.imageUrl || '';
       trackImg.style.display = 'block';
@@ -207,22 +361,29 @@ function renderPlayerBar(): HTMLElement {
       trackTitle.textContent = currentTrack.title;
       trackArtist.textContent = currentTrack.artist;
     }
-
     playBtn.innerHTML = isPlaying
       ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`
       : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
-
     (progressBar as HTMLInputElement).value = String(Math.round(progress));
     timeStart.textContent = formatTime(currentTime);
     timeEnd.textContent = formatTime(duration);
     (volumeBar as HTMLInputElement).value = String(Math.round(volume));
-
     progressBar.style.setProperty('--progress', `${Math.round(progress)}%`);
     volumeBar.style.setProperty('--volume', `${Math.round(volume)}%`);
   });
 
   return bar;
 }
+
+function repeatSvg(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>`;
+}
+
+function repeatOneSvg(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><text x="11" y="13.5" font-size="6" fill="currentColor" stroke="none" font-weight="bold">۱</text></svg>`;
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 
 function renderSidebar(activeView: View): HTMLElement {
   const sidebar = el('aside', { class: 'sidebar' });
@@ -249,9 +410,7 @@ function renderSidebar(activeView: View): HTMLElement {
   navItems.forEach(({ view, label, icon }) => {
     const btn = el('button', { class: `nav-item ${activeView === view ? 'nav-item--active' : ''}` });
     btn.innerHTML = `<span class="nav-item__icon">${icon}</span><span class="nav-item__label">${label}</span>`;
-    btn.addEventListener('click', () => {
-      store.setView(view);
-    });
+    btn.addEventListener('click', () => store.setView(view));
     nav.appendChild(btn);
   });
 
@@ -259,11 +418,9 @@ function renderSidebar(activeView: View): HTMLElement {
   settingsBtn.innerHTML = `<span class="nav-item__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="nav-item__label">تنظیمات</span>`;
   settingsBtn.addEventListener('click', () => store.setShowSettings(true));
 
-  sidebar.appendChild(logo);
-  sidebar.appendChild(nav);
-  sidebar.appendChild(settingsBtn);
+  sidebar.append(logo, nav, settingsBtn);
 
-  store.on<View>('view', (view) => {
+  store.on<View>('view', view => {
     nav.querySelectorAll('.nav-item').forEach((btn, i) => {
       btn.classList.toggle('nav-item--active', navItems[i]?.view === view);
     });
@@ -272,73 +429,19 @@ function renderSidebar(activeView: View): HTMLElement {
   return sidebar;
 }
 
-function renderHomeView(): HTMLElement {
-  const view = el('div', { class: 'view home-view' });
-
-  const hero = el('div', { class: 'hero' });
-  hero.innerHTML = `
-    <div class="hero__content">
-      <h1 class="hero__title">موسیقی کشف کن</h1>
-      <p class="hero__subtitle">میلیون‌ها آهنگ از iTunes، Jamendo، JioSaavn و منابع دیگر</p>
-      <div class="hero__search-wrap">
-        <div class="search-box">
-          <svg class="search-box__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input class="search-box__input" type="text" placeholder="جستجو برای آهنگ، هنرمند، آلبوم..." id="hero-search"/>
-          <button class="search-box__btn" id="hero-search-btn">جستجو</button>
-        </div>
-      </div>
-      <div class="source-badges">
-        <span class="source-tag source-tag--itunes">iTunes</span>
-        <span class="source-tag source-tag--jamendo">Jamendo</span>
-        <span class="source-tag source-tag--jiosaavn">JioSaavn</span>
-        <span class="source-tag source-tag--musicapi">MusicAPI</span>
-      </div>
-    </div>
-    <div class="hero__visual">
-      <div class="hero__vinyl">
-        <div class="vinyl-outer">
-          <div class="vinyl-inner">
-            <div class="vinyl-dot"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  view.appendChild(hero);
-
-  const searchInput = hero.querySelector('#hero-search') as HTMLInputElement;
-  const searchBtn = hero.querySelector('#hero-search-btn') as HTMLButtonElement;
-
-  const doSearch = () => {
-    const q = searchInput.value.trim();
-    if (q) {
-      store.setView('search');
-      performSearch(q);
-    }
-  };
-
-  searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
-  searchBtn.addEventListener('click', doSearch);
-
-  return view;
-}
+// ── Search View ───────────────────────────────────────────────────────────────
 
 async function performSearch(query: string): Promise<void> {
   store.setSearchLoading(true);
   const { settings } = store.getState();
   const { enabledSources, jamendoClientId, jiosaavnUrl } = settings;
-
-  const searchPromises: Promise<Track[]>[] = [];
-
-  if (enabledSources.itunes) searchPromises.push(searchItunes(query).catch(() => []));
-  if (enabledSources.jamendo && jamendoClientId) searchPromises.push(searchJamendo(query, jamendoClientId).catch(() => []));
-  if (enabledSources.jiosaavn) searchPromises.push(searchJioSaavn(query, jiosaavnUrl).catch(() => []));
-  if (enabledSources.musicapi) searchPromises.push(searchMusicApi(query).catch(() => []));
-
+  const promises: Promise<Track[]>[] = [];
+  if (enabledSources.itunes) promises.push(searchItunes(query).catch(() => []));
+  if (enabledSources.jamendo && jamendoClientId) promises.push(searchJamendo(query, jamendoClientId).catch(() => []));
+  if (enabledSources.jiosaavn) promises.push(searchJioSaavn(query, jiosaavnUrl).catch(() => []));
+  if (enabledSources.musicapi) promises.push(searchMusicApi(query).catch(() => []));
   try {
-    const allResults = await Promise.all(searchPromises);
-    const tracks = allResults.flat();
+    const tracks = (await Promise.all(promises)).flat();
     store.setSearchResults(query, tracks);
   } catch {
     store.setSearchError('جستجو ناموفق بود. لطفاً دوباره تلاش کنید.');
@@ -347,121 +450,93 @@ async function performSearch(query: string): Promise<void> {
 
 function renderSearchView(): HTMLElement {
   const view = el('div', { class: 'view search-view' });
-
   const searchHeader = el('div', { class: 'search-header' });
   searchHeader.innerHTML = `
     <div class="search-box search-box--large">
       <svg class="search-box__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input class="search-box__input" type="text" placeholder="جستجو برای آهنگ، هنرمند، آلبوم..." id="search-input"/>
-    </div>
-  `;
-
+    </div>`;
   const resultsContainer = el('div', { class: 'search-results' });
-
-  view.appendChild(searchHeader);
-  view.appendChild(resultsContainer);
+  view.append(searchHeader, resultsContainer);
 
   const searchInput = searchHeader.querySelector('#search-input') as HTMLInputElement;
   const { search } = store.getState();
-
   if (search.query) {
     searchInput.value = search.query;
     renderSearchResults(resultsContainer, search);
   }
-
   requestAnimationFrame(() => searchInput.focus());
 
-  let debounceTimer: ReturnType<typeof setTimeout>;
+  let debounce: ReturnType<typeof setTimeout>;
   searchInput.addEventListener('input', () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
       const q = searchInput.value.trim();
       if (q.length >= 2) performSearch(q);
     }, 500);
   });
-
-  store.on<SearchState>('search', (state) => {
-    renderSearchResults(resultsContainer, state);
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      clearTimeout(debounce);
+      const q = searchInput.value.trim();
+      if (q) performSearch(q);
+    }
   });
 
+  store.on<SearchState>('search', state => renderSearchResults(resultsContainer, state));
   return view;
 }
 
 function renderSearchResults(container: HTMLElement, state: SearchState): void {
   container.innerHTML = '';
-
   if (state.loading) {
-    container.innerHTML = `
-      <div class="loading">
-        <div class="spinner"></div>
-        <p>در حال جستجو در همه منابع...</p>
-      </div>`;
+    container.innerHTML = `<div class="loading"><div class="spinner"></div><p>در حال جستجو در همه منابع...</p></div>`;
     return;
   }
-
   if (state.error) {
     container.innerHTML = `<div class="empty"><p class="error-text">${state.error}</p></div>`;
     return;
   }
-
   if (!state.results.length && state.query) {
     container.innerHTML = `<div class="empty"><p>نتیجه‌ای برای <strong>«${state.query}»</strong> یافت نشد</p><p class="empty-hint">کلمه دیگری امتحان کنید یا منابع بیشتری را در تنظیمات فعال کنید.</p></div>`;
     return;
   }
-
   if (!state.results.length) return;
-
   const header = el('div', { class: 'results-header' });
   header.innerHTML = `<h2>نتایج «<em>${state.query}</em>» <span class="results-count">${state.results.length} آهنگ</span></h2>`;
-  container.appendChild(header);
-
   const grid = el('div', { class: 'tracks-grid' });
-  state.results.forEach((track: Track) => {
-    grid.appendChild(renderTrackCard(track));
-  });
-  container.appendChild(grid);
+  state.results.forEach(t => grid.appendChild(renderTrackCard(t)));
+  container.append(header, grid);
 }
+
+// ── Favorites View ────────────────────────────────────────────────────────────
 
 function renderFavoritesView(): HTMLElement {
   const view = el('div', { class: 'view favorites-view' });
-
   const header = el('div', { class: 'view-header' });
-  header.innerHTML = `
-    <h1>علاقه‌مندی‌های شما</h1>
-    <p class="view-header__sub">آهنگ‌هایی که دوست داشتید</p>
-  `;
-
+  header.innerHTML = `<h1>علاقه‌مندی‌های شما</h1><p class="view-header__sub">آهنگ‌هایی که دوست داشتید</p>`;
   const content = el('div', { class: 'tracks-grid' });
-
   const renderFavs = () => {
     content.innerHTML = '';
     const { favorites } = store.getState();
     if (!favorites.length) {
-      content.innerHTML = `
-        <div class="empty empty--full">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-          <p>هنوز علاقه‌مندی ندارید.</p>
-          <p class="empty-hint">روی آیکون قلب هر آهنگی کلیک کنید تا اینجا ذخیره شود.</p>
-        </div>`;
+      content.innerHTML = `<div class="empty empty--full"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><p>هنوز علاقه‌مندی ندارید.</p><p class="empty-hint">روی آیکون قلب هر آهنگی کلیک کنید تا اینجا ذخیره شود.</p></div>`;
       return;
     }
-    favorites.forEach(track => content.appendChild(renderTrackCard(track)));
+    favorites.forEach(t => content.appendChild(renderTrackCard(t)));
   };
-
   renderFavs();
   store.on('favorites', renderFavs);
-
-  view.appendChild(header);
-  view.appendChild(content);
+  view.append(header, content);
   return view;
 }
+
+// ── Settings Modal ────────────────────────────────────────────────────────────
 
 function renderSettings(): HTMLElement {
   const overlay = el('div', { class: 'settings-overlay' });
   const modal = el('div', { class: 'settings-modal' });
-
   const { settings } = store.getState();
-
   modal.innerHTML = `
     <div class="settings-header">
       <h2>تنظیمات</h2>
@@ -469,93 +544,61 @@ function renderSettings(): HTMLElement {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
-
     <div class="settings-section">
       <h3>منابع API</h3>
-      <p class="settings-hint">منابع موسیقی را فعال یا غیرفعال کنید. برخی به کلید API نیاز دارند.</p>
-
-      <label class="toggle-row">
-        <span>iTunes <span class="badge badge--free">رایگان · بدون کلید</span></span>
-        <input type="checkbox" id="src-itunes" ${settings.enabledSources.itunes ? 'checked' : ''}/>
-      </label>
-
-      <label class="toggle-row">
-        <span>Jamendo <span class="badge badge--key">نیاز به کلید</span></span>
-        <input type="checkbox" id="src-jamendo" ${settings.enabledSources.jamendo ? 'checked' : ''}/>
-      </label>
-
-      <label class="toggle-row">
-        <span>JioSaavn <span class="badge badge--free">رایگان · بدون کلید</span></span>
-        <input type="checkbox" id="src-jiosaavn" ${settings.enabledSources.jiosaavn ? 'checked' : ''}/>
-      </label>
-
-      <label class="toggle-row">
-        <span>MusicAPI <span class="badge badge--free">رایگان · بدون کلید</span></span>
-        <input type="checkbox" id="src-musicapi" ${settings.enabledSources.musicapi ? 'checked' : ''}/>
-      </label>
+      <p class="settings-hint">منابع موسیقی را فعال یا غیرفعال کنید.</p>
+      <label class="toggle-row"><span>iTunes <span class="badge badge--free">رایگان · بدون کلید</span></span><input type="checkbox" id="src-itunes" ${settings.enabledSources.itunes ? 'checked' : ''}/></label>
+      <label class="toggle-row"><span>Jamendo <span class="badge badge--key">نیاز به کلید</span></span><input type="checkbox" id="src-jamendo" ${settings.enabledSources.jamendo ? 'checked' : ''}/></label>
+      <label class="toggle-row"><span>JioSaavn <span class="badge badge--free">رایگان · بدون کلید</span></span><input type="checkbox" id="src-jiosaavn" ${settings.enabledSources.jiosaavn ? 'checked' : ''}/></label>
+      <label class="toggle-row"><span>MusicAPI <span class="badge badge--free">رایگان · بدون کلید</span></span><input type="checkbox" id="src-musicapi" ${settings.enabledSources.musicapi ? 'checked' : ''}/></label>
     </div>
-
     <div class="settings-section">
       <h3>کلید API جامندو</h3>
-      <p class="settings-hint">یک کلید رایگان از <a href="https://devportal.jamendo.com" target="_blank" rel="noopener">devportal.jamendo.com</a> دریافت کنید تا به آهنگ‌های Creative Commons دسترسی داشته باشید.</p>
+      <p class="settings-hint">کلید رایگان از <a href="https://devportal.jamendo.com" target="_blank" rel="noopener">devportal.jamendo.com</a></p>
       <input class="settings-input" type="text" id="jamendo-key" placeholder="client_id جامندو" value="${settings.jamendoClientId}"/>
     </div>
-
     <div class="settings-section">
       <h3>آدرس API جیوساوان</h3>
-      <p class="settings-hint">آدرس سفارشی نمونه API (پیش‌فرض: https://saavn.dev)</p>
-      <input class="settings-input" type="url" id="jiosaavn-url" placeholder="https://saavn.dev" value="${settings.jiosaavnUrl}"/>
+      <p class="settings-hint">پیش‌فرض: https://saavn.sumit.co</p>
+      <input class="settings-input" type="url" id="jiosaavn-url" placeholder="https://saavn.sumit.co" value="${settings.jiosaavnUrl}"/>
     </div>
-
     <div class="settings-footer">
       <button class="btn-primary" id="save-settings">ذخیره تنظیمات</button>
-    </div>
-  `;
-
+    </div>`;
   overlay.appendChild(modal);
-
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) store.setShowSettings(false);
-  });
-
+  overlay.addEventListener('click', e => { if (e.target === overlay) store.setShowSettings(false); });
+  overlay.addEventListener('keydown', e => { if (e.key === 'Escape') store.setShowSettings(false); });
   modal.querySelector('#close-settings')!.addEventListener('click', () => store.setShowSettings(false));
-
   modal.querySelector('#save-settings')!.addEventListener('click', () => {
-    const jamendoClientId = (modal.querySelector('#jamendo-key') as HTMLInputElement).value.trim();
-    const jiosaavnUrl = (modal.querySelector('#jiosaavn-url') as HTMLInputElement).value.trim() || 'https://saavn.dev';
-    const enabledSources = {
-      itunes: (modal.querySelector('#src-itunes') as HTMLInputElement).checked,
-      jamendo: (modal.querySelector('#src-jamendo') as HTMLInputElement).checked,
-      jiosaavn: (modal.querySelector('#src-jiosaavn') as HTMLInputElement).checked,
-      musicapi: (modal.querySelector('#src-musicapi') as HTMLInputElement).checked,
-    };
-    store.saveSettings({ jamendoClientId, jiosaavnUrl, enabledSources });
+    store.saveSettings({
+      jamendoClientId: (modal.querySelector('#jamendo-key') as HTMLInputElement).value.trim(),
+      jiosaavnUrl: (modal.querySelector('#jiosaavn-url') as HTMLInputElement).value.trim() || 'https://saavn.sumit.co',
+      enabledSources: {
+        itunes: (modal.querySelector('#src-itunes') as HTMLInputElement).checked,
+        jamendo: (modal.querySelector('#src-jamendo') as HTMLInputElement).checked,
+        jiosaavn: (modal.querySelector('#src-jiosaavn') as HTMLInputElement).checked,
+        musicapi: (modal.querySelector('#src-musicapi') as HTMLInputElement).checked,
+      },
+    });
     store.setShowSettings(false);
   });
-
-  overlay.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') store.setShowSettings(false);
-  });
-
   return overlay;
 }
+
+// ── App Root ──────────────────────────────────────────────────────────────────
 
 export function initApp(root: HTMLElement): void {
   const appEl = el('div', { class: 'app' });
   const mainContent = el('main', { class: 'main-content' });
-
   const sidebar = renderSidebar('home');
   const playerBar = renderPlayerBar();
 
   let currentViewEl: HTMLElement = renderHomeView();
   mainContent.appendChild(currentViewEl);
-
-  appEl.appendChild(sidebar);
-  appEl.appendChild(mainContent);
-  appEl.appendChild(playerBar);
+  appEl.append(sidebar, mainContent, playerBar);
   root.appendChild(appEl);
 
-  store.on<View>('view', (view) => {
+  store.on<View>('view', view => {
     mainContent.removeChild(currentViewEl);
     if (view === 'home') currentViewEl = renderHomeView();
     else if (view === 'search') currentViewEl = renderSearchView();
@@ -565,13 +608,11 @@ export function initApp(root: HTMLElement): void {
   });
 
   let settingsEl: HTMLElement | null = null;
-  store.on<boolean>('showSettings', (show) => {
+  store.on<boolean>('showSettings', show => {
     if (show) {
       settingsEl = renderSettings();
       document.body.appendChild(settingsEl);
-      requestAnimationFrame(() => {
-        (settingsEl?.querySelector('#close-settings') as HTMLElement)?.focus();
-      });
+      requestAnimationFrame(() => (settingsEl?.querySelector('#close-settings') as HTMLElement)?.focus());
     } else if (settingsEl) {
       settingsEl.remove();
       settingsEl = null;

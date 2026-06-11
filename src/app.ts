@@ -4,6 +4,10 @@ import { searchItunes } from './api/itunes'
 import { searchJamendo } from './api/jamendo'
 import { searchJioSaavn } from './api/jiosaavn'
 import { searchMusicApi } from './api/musicapi'
+import { searchMusicBrainz } from './api/musicbrainz'
+import { searchAudiomack } from './api/audiomack'
+import { getArtistInfo } from './api/audiodb'
+import { getLyrics } from './api/lyrics'
 import { getTopSongs, getTopAlbums, getGenreSongs, GENRES } from './api/itunes-charts'
 import type { Track, Album, View, PlayerState, SearchState } from './types'
 
@@ -15,7 +19,10 @@ function formatTime(seconds: number): string {
 }
 
 function sourceLabel(source: string): string {
-  return { itunes: 'iTunes', jamendo: 'Jamendo', jiosaavn: 'JioSaavn', musicapi: 'MusicAPI' }[source] ?? source;
+  return {
+    itunes: 'iTunes', jamendo: 'Jamendo', jiosaavn: 'JioSaavn',
+    musicapi: 'MusicAPI', audiomack: 'Audiomack', musicbrainz: 'MusicBrainz',
+  }[source] ?? source;
 }
 
 function greeting(): string {
@@ -158,17 +165,24 @@ function fillArtistRow(row: HTMLElement, tracks: Track[]): void {
     seen.add(t.artist);
     const card = el('div', { class: 'artist-card' });
     const imgWrap = el('div', { class: 'artist-card__img-wrap' });
-    const img = el('img', { class: 'artist-card__img', src: t.imageUrl || '', alt: t.artist });
-    fallbackImg(img as HTMLImageElement, t.artist, '6D28D9');
+    const img = el('img', { class: 'artist-card__img', src: t.imageUrl || '', alt: t.artist }) as HTMLImageElement;
+    fallbackImg(img, t.artist, '6D28D9');
     imgWrap.appendChild(img);
     card.append(imgWrap, el('p', { class: 'artist-card__name' }, t.artist));
-    if (t.genre) card.appendChild(el('p', { class: 'artist-card__genre' }, t.genre));
+    const genreEl = el('p', { class: 'artist-card__genre' }, t.genre || '');
+    card.appendChild(genreEl);
     card.addEventListener('click', () => {
       store.setSearchLoading(true);
       store.setView('search');
       searchItunes(t.artist).then(r => store.setSearchResults(t.artist, r)).catch(() => store.setSearchError('خطا'));
     });
     row.appendChild(card);
+    // Upgrade artist image from TheAudioDB asynchronously
+    getArtistInfo(t.artist).then(info => {
+      if (!info) return;
+      if (info.imageUrl) { img.src = info.imageUrl; img.onerror = () => fallbackImg(img, t.artist, '6D28D9'); }
+      if (info.genre && !genreEl.textContent) genreEl.textContent = info.genre;
+    }).catch(() => {});
   });
 }
 
@@ -358,16 +372,19 @@ function renderPlayerBar(): HTMLElement {
 
   center.append(controls, progressWrap);
 
-  // ── RIGHT: volume ──────────────────────────────────────────
+  // ── RIGHT: lyrics + volume ─────────────────────────────────
   const right = el('div', { class: 'player-bar__right', dir: 'ltr' });
 
   let currentVolume = 70;
   let isMuted = false;
 
+  const lyricsBtn = el('button', { class: 'pb-btn pb-btn--sm pb-lyrics-btn', 'aria-label': 'ترانه' });
+  lyricsBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+
   const volBtn = el('button', { class: 'pb-btn pb-btn--sm', 'aria-label': 'صدا' });
   volBtn.innerHTML = iconVolume(currentVolume);
   const volumeBar = el('input', { class: 'pb-volume', type: 'range', min: '0', max: '100', value: '70' });
-  right.append(volBtn, volumeBar);
+  right.append(lyricsBtn, volBtn, volumeBar);
 
   bar.append(trackInfo, center, right);
 
@@ -416,6 +433,40 @@ function renderPlayerBar(): HTMLElement {
     const fav = store.isFavorite(currentTrack.id);
     heartBtn.classList.toggle('pb-heart--active', fav);
     heartBtn.innerHTML = heartSvg(fav);
+  });
+
+  // ── Lyrics panel ───────────────────────────────────────────
+  let lyricsPanel: HTMLElement | null = null;
+
+  function closeLyricsPanel(): void {
+    if (lyricsPanel) { lyricsPanel.remove(); lyricsPanel = null; }
+    lyricsBtn.classList.remove('pb-btn--active');
+  }
+
+  lyricsBtn.addEventListener('click', () => {
+    if (lyricsPanel) { closeLyricsPanel(); return; }
+    const { currentTrack } = store.getState().player;
+    if (!currentTrack) return;
+    lyricsBtn.classList.add('pb-btn--active');
+    const panel = el('div', { class: 'lyrics-panel' });
+    const header = el('div', { class: 'lyrics-panel__header' });
+    const titleWrap = el('div', {});
+    titleWrap.append(
+      el('p', { class: 'lyrics-panel__title' }, currentTrack.title),
+      el('p', { class: 'lyrics-panel__artist' }, currentTrack.artist),
+    );
+    const closeBtn = el('button', { class: 'pb-btn pb-btn--sm', 'aria-label': 'بستن' });
+    closeBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    closeBtn.addEventListener('click', closeLyricsPanel);
+    header.append(titleWrap, closeBtn);
+    const body = el('div', { class: 'lyrics-panel__body' });
+    body.textContent = 'در حال بارگذاری ترانه...';
+    panel.append(header, body);
+    document.body.appendChild(panel);
+    lyricsPanel = panel;
+    getLyrics(currentTrack.artist, currentTrack.title).then(text => {
+      body.textContent = text || 'ترانه‌ای یافت نشد.';
+    }).catch(() => { body.textContent = 'ترانه‌ای یافت نشد.'; });
   });
 
   // ── State sync ─────────────────────────────────────────────
@@ -505,12 +556,16 @@ function renderSidebar(activeView: View): HTMLElement {
 async function performSearch(query: string): Promise<void> {
   store.setSearchLoading(true);
   const { settings } = store.getState();
-  const { enabledSources, jamendoClientId, jiosaavnUrl } = settings;
+  const { enabledSources, jamendoClientId, jiosaavnUrl, audiomackKey, audiomackSecret } = settings;
   const promises: Promise<Track[]>[] = [];
   if (enabledSources.itunes) promises.push(searchItunes(query).catch(() => []));
   if (enabledSources.jamendo && jamendoClientId) promises.push(searchJamendo(query, jamendoClientId).catch(() => []));
   if (enabledSources.jiosaavn) promises.push(searchJioSaavn(query, jiosaavnUrl).catch(() => []));
   if (enabledSources.musicapi) promises.push(searchMusicApi(query).catch(() => []));
+  if (enabledSources.musicbrainz) promises.push(searchMusicBrainz(query, jiosaavnUrl).catch(() => []));
+  if (enabledSources.audiomack && audiomackKey && audiomackSecret) {
+    promises.push(searchAudiomack(query, audiomackKey, audiomackSecret).catch(() => []));
+  }
   try {
     const tracks = (await Promise.all(promises)).flat();
     store.setSearchResults(query, tracks);
@@ -622,6 +677,8 @@ function renderSettings(): HTMLElement {
       <label class="toggle-row"><span>Jamendo <span class="badge badge--key">نیاز به کلید</span></span><input type="checkbox" id="src-jamendo" ${settings.enabledSources.jamendo ? 'checked' : ''}/></label>
       <label class="toggle-row"><span>JioSaavn <span class="badge badge--free">رایگان · بدون کلید</span></span><input type="checkbox" id="src-jiosaavn" ${settings.enabledSources.jiosaavn ? 'checked' : ''}/></label>
       <label class="toggle-row"><span>MusicAPI <span class="badge badge--free">رایگان · بدون کلید</span></span><input type="checkbox" id="src-musicapi" ${settings.enabledSources.musicapi ? 'checked' : ''}/></label>
+      <label class="toggle-row"><span>MusicBrainz <span class="badge badge--free">رایگان · بدون کلید</span></span><input type="checkbox" id="src-musicbrainz" ${settings.enabledSources.musicbrainz ? 'checked' : ''}/></label>
+      <label class="toggle-row"><span>Audiomack <span class="badge badge--key">نیاز به کلید</span></span><input type="checkbox" id="src-audiomack" ${settings.enabledSources.audiomack ? 'checked' : ''}/></label>
     </div>
     <div class="settings-section">
       <h3>کلید API جامندو</h3>
@@ -632,6 +689,12 @@ function renderSettings(): HTMLElement {
       <h3>آدرس API جیوساوان</h3>
       <p class="settings-hint">پیش‌فرض: https://saavn.sumit.co</p>
       <input class="settings-input" type="url" id="jiosaavn-url" placeholder="https://saavn.sumit.co" value="${settings.jiosaavnUrl}"/>
+    </div>
+    <div class="settings-section">
+      <h3>کلیدهای API آدیوماک</h3>
+      <p class="settings-hint">از <a href="https://audiomack.com/developers" target="_blank" rel="noopener">audiomack.com/developers</a> دریافت کنید</p>
+      <input class="settings-input" type="text" id="audiomack-key" placeholder="Consumer Key" value="${settings.audiomackKey}" style="margin-bottom:8px"/>
+      <input class="settings-input" type="password" id="audiomack-secret" placeholder="Consumer Secret" value="${settings.audiomackSecret}"/>
     </div>
     <div class="settings-footer">
       <button class="btn-primary" id="save-settings">ذخیره تنظیمات</button>
@@ -644,11 +707,15 @@ function renderSettings(): HTMLElement {
     store.saveSettings({
       jamendoClientId: (modal.querySelector('#jamendo-key') as HTMLInputElement).value.trim(),
       jiosaavnUrl: (modal.querySelector('#jiosaavn-url') as HTMLInputElement).value.trim() || 'https://saavn.sumit.co',
+      audiomackKey: (modal.querySelector('#audiomack-key') as HTMLInputElement).value.trim(),
+      audiomackSecret: (modal.querySelector('#audiomack-secret') as HTMLInputElement).value.trim(),
       enabledSources: {
         itunes: (modal.querySelector('#src-itunes') as HTMLInputElement).checked,
         jamendo: (modal.querySelector('#src-jamendo') as HTMLInputElement).checked,
         jiosaavn: (modal.querySelector('#src-jiosaavn') as HTMLInputElement).checked,
         musicapi: (modal.querySelector('#src-musicapi') as HTMLInputElement).checked,
+        musicbrainz: (modal.querySelector('#src-musicbrainz') as HTMLInputElement).checked,
+        audiomack: (modal.querySelector('#src-audiomack') as HTMLInputElement).checked,
       },
     });
     store.setShowSettings(false);

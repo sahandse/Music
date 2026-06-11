@@ -24,20 +24,32 @@ const SETTINGS_KEY = 'music_app_settings';
 const FAVORITES_KEY = 'music_app_favorites';
 
 function loadSettings(): Settings {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return JSON.parse(raw) as Settings;
-  } catch {}
-  return {
+  const defaults: Settings = {
     jamendoClientId: '826afc6b',
     jiosaavnUrl: 'https://saavn.sumit.co',
+    audiomackKey: '',
+    audiomackSecret: '',
     enabledSources: {
       itunes: true,
       jamendo: true,
       jiosaavn: true,
       musicapi: true,
-    }
+      musicbrainz: true,
+      audiomack: false,
+    },
   };
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<Settings>;
+      return {
+        ...defaults,
+        ...parsed,
+        enabledSources: { ...defaults.enabledSources, ...parsed.enabledSources },
+      };
+    }
+  } catch {}
+  return defaults;
 }
 
 function loadFavorites(): Track[] {

@@ -1,4 +1,4 @@
-export type Source = 'itunes' | 'jamendo' | 'jiosaavn' | 'musicapi';
+export type Source = 'itunes' | 'jamendo' | 'jiosaavn' | 'musicapi' | 'audiomack' | 'musicbrainz';
 
 export interface Track {
   id: string;
@@ -39,6 +39,8 @@ export interface PlayerState {
 export interface Settings {
   jamendoClientId: string;
   jiosaavnUrl: string;
+  audiomackKey: string;
+  audiomackSecret: string;
   enabledSources: Record<Source, boolean>;
 }
 

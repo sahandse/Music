@@ -12,6 +12,8 @@ import { searchNex1Music, getIranianCharts } from './api/nex1music'
 import { searchHivefy } from './api/hivefy'
 import { searchMajidApi, getNewestIranianTracks } from './api/majidapi'
 import { searchDeezer, getDeezerIranianCharts } from './api/deezer'
+import { searchSoundCloud } from './api/soundcloud'
+import { searchSpotify } from './api/spotify'
 import { getPersianPodcasts } from './api/persian-podcasts'
 import { getTopSongs, getTopAlbums, getGenreSongs, GENRES } from './api/itunes-charts'
 import type { Track, Album, Podcast, View, PlayerState, SearchState } from './types'
@@ -31,6 +33,8 @@ function sourceLabel(source: string): string {
     hivefy: 'JioSaavn HD',
     majidapi: 'مجید API',
     deezer: 'Deezer',
+    soundcloud: 'SoundCloud',
+    spotify: 'Spotify',
   }[source] ?? source;
 }
 
@@ -652,6 +656,8 @@ async function performSearch(query: string): Promise<void> {
   if (enabledSources.hivefy) promises.push(searchHivefy(query).catch(() => []));
   if (enabledSources.majidapi) promises.push(searchMajidApi(query).catch(() => []));
   if (enabledSources.deezer) promises.push(searchDeezer(query).catch(() => []));
+  if (enabledSources.soundcloud) promises.push(searchSoundCloud(query, settings.soundcloudClientId).catch(() => []));
+  if (enabledSources.spotify) promises.push(searchSpotify(query, settings.spotifyClientId, settings.spotifyClientSecret).catch(() => []));
   if (enabledSources.audiomack && audiomackKey && audiomackSecret) {
     promises.push(searchAudiomack(query, audiomackKey, audiomackSecret).catch(() => []));
   }
@@ -798,6 +804,14 @@ function renderSettings(): HTMLElement {
           <span class="source-toggle__dot" style="background:#a238ff"></span>
           <span class="source-toggle__label">Deezer</span>
         </label>
+        <label class="source-toggle"><input type="checkbox" id="src-soundcloud" ${settings.enabledSources.soundcloud ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#ff5500"></span>
+          <span class="source-toggle__label">SoundCloud</span>
+        </label>
+        <label class="source-toggle"><input type="checkbox" id="src-spotify" ${settings.enabledSources.spotify ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#1db954"></span>
+          <span class="source-toggle__label">Spotify</span>
+        </label>
         <label class="source-toggle"><input type="checkbox" id="src-audiomack" ${settings.enabledSources.audiomack ? 'checked' : ''}/>
           <span class="source-toggle__dot" style="background:#ffa500"></span>
           <span class="source-toggle__label">Audiomack</span>
@@ -809,6 +823,12 @@ function renderSettings(): HTMLElement {
       <div class="settings-adv-body">
         <label class="settings-adv-label">آدرس JioSaavn API</label>
         <input class="settings-input" type="url" id="jiosaavn-url" placeholder="https://saavn.sumit.co" value="${settings.jiosaavnUrl}"/>
+        <label class="settings-adv-label" style="margin-top:12px">SoundCloud Client ID</label>
+        <input class="settings-input" type="text" id="soundcloud-id" placeholder="Client ID از soundcloud.com/you/apps" value="${settings.soundcloudClientId}"/>
+        <label class="settings-adv-label" style="margin-top:12px">Spotify Client ID</label>
+        <input class="settings-input" type="text" id="spotify-id" placeholder="Client ID از developer.spotify.com" value="${settings.spotifyClientId}"/>
+        <label class="settings-adv-label" style="margin-top:8px">Spotify Client Secret</label>
+        <input class="settings-input" type="password" id="spotify-secret" placeholder="Client Secret" value="${settings.spotifyClientSecret}"/>
         <label class="settings-adv-label" style="margin-top:12px">Audiomack Consumer Key</label>
         <input class="settings-input" type="text" id="audiomack-key" placeholder="Consumer Key" value="${settings.audiomackKey}"/>
         <label class="settings-adv-label" style="margin-top:8px">Audiomack Consumer Secret</label>
@@ -828,6 +848,9 @@ function renderSettings(): HTMLElement {
       jiosaavnUrl: (modal.querySelector('#jiosaavn-url') as HTMLInputElement).value.trim() || 'https://saavn.sumit.co',
       audiomackKey: (modal.querySelector('#audiomack-key') as HTMLInputElement).value.trim(),
       audiomackSecret: (modal.querySelector('#audiomack-secret') as HTMLInputElement).value.trim(),
+      soundcloudClientId: (modal.querySelector('#soundcloud-id') as HTMLInputElement).value.trim(),
+      spotifyClientId: (modal.querySelector('#spotify-id') as HTMLInputElement).value.trim(),
+      spotifyClientSecret: (modal.querySelector('#spotify-secret') as HTMLInputElement).value.trim(),
       enabledSources: {
         itunes: (modal.querySelector('#src-itunes') as HTMLInputElement).checked,
         jamendo: (modal.querySelector('#src-jamendo') as HTMLInputElement).checked,
@@ -839,6 +862,8 @@ function renderSettings(): HTMLElement {
         hivefy: (modal.querySelector('#src-hivefy') as HTMLInputElement).checked,
         majidapi: (modal.querySelector('#src-majidapi') as HTMLInputElement).checked,
         deezer: (modal.querySelector('#src-deezer') as HTMLInputElement).checked,
+        soundcloud: (modal.querySelector('#src-soundcloud') as HTMLInputElement).checked,
+        spotify: (modal.querySelector('#src-spotify') as HTMLInputElement).checked,
       },
     });
     store.setShowSettings(false);

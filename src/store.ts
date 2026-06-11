@@ -29,6 +29,9 @@ function loadSettings(): Settings {
     jiosaavnUrl: 'https://saavn.sumit.co',
     audiomackKey: '',
     audiomackSecret: '',
+    soundcloudClientId: '',
+    spotifyClientId: '',
+    spotifyClientSecret: '',
     enabledSources: {
       itunes: true,
       jamendo: true,
@@ -40,6 +43,8 @@ function loadSettings(): Settings {
       hivefy: true,
       majidapi: true,
       deezer: true,
+      soundcloud: true,
+      spotify: true,
     },
   };
   try {

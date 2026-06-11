@@ -1,4 +1,4 @@
-export type Source = 'itunes' | 'jamendo' | 'jiosaavn' | 'musicapi' | 'audiomack' | 'musicbrainz' | 'nex1music' | 'hivefy' | 'majidapi' | 'deezer';
+export type Source = 'itunes' | 'jamendo' | 'jiosaavn' | 'musicapi' | 'audiomack' | 'musicbrainz' | 'nex1music' | 'hivefy' | 'majidapi' | 'deezer' | 'soundcloud' | 'spotify';
 
 export interface Track {
   id: string;
@@ -41,6 +41,9 @@ export interface Settings {
   jiosaavnUrl: string;
   audiomackKey: string;
   audiomackSecret: string;
+  soundcloudClientId: string;
+  spotifyClientId: string;
+  spotifyClientSecret: string;
   enabledSources: Record<Source, boolean>;
 }
 

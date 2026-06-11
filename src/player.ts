@@ -100,10 +100,14 @@ class AudioPlayer {
       store.updatePlayer({ queue: newQueue, queueIndex: newQueue.length - 1, currentTrack: track });
       this.audio.src = track.audioUrl;
       this.audio.play().catch(() => {});
-      if (track.source === 'itunes' || track.source === 'deezer') void this.upgradeToFullVersion(track);
+      if (this.needsUpgrade(track.source)) void this.upgradeToFullVersion(track);
       return;
     }
     this.playAtIndex(idx);
+  }
+
+  private needsUpgrade(source: string): boolean {
+    return source === 'itunes' || source === 'deezer' || source === 'spotify';
   }
 
   playAtIndex(index: number): void {
@@ -113,7 +117,7 @@ class AudioPlayer {
     store.updatePlayer({ currentTrack: track, queueIndex: index });
     this.audio.src = track.audioUrl;
     this.audio.play().catch(() => {});
-    if (track.source === 'itunes' || track.source === 'deezer') void this.upgradeToFullVersion(track);
+    if (this.needsUpgrade(track.source)) void this.upgradeToFullVersion(track);
   }
 
   togglePlay(): void {

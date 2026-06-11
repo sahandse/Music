@@ -750,6 +750,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .source-tag--hivefy { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .source-tag--majidapi { background: rgba(239,68,68,0.15); color: #ef4444; }
 .source-tag--deezer { background: rgba(162,56,255,0.15); color: #a238ff; }
+.source-tag--soundcloud { background: rgba(255,85,0,0.15); color: #ff5500; }
+.source-tag--spotify { background: rgba(29,185,84,0.15); color: #1db954; }
 
 /* ── Buttons ── */
 .btn-icon {

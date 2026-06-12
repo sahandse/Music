@@ -5,8 +5,20 @@ const BASE = 'https://sevilmusics.com';
 const AUDIO_HOST = 'dl.sevilmusics.com';
 const AUDIO_EXTS = ['.mp3', '.m4a', '.aac'];
 
+interface WPPost {
+  id: number;
+  title: { rendered: string };
+  link: string;
+  content: { rendered: string };
+  _embedded?: { 'wp:featuredmedia'?: Array<{ source_url?: string }> };
+}
+
 function proxied(url: string): string {
   return `${PROXY}${encodeURIComponent(url)}`;
+}
+
+function decodeHtml(html: string): string {
+  return new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() || '';
 }
 
 function isAudioUrl(href: string | null | undefined): boolean {
@@ -18,61 +30,27 @@ function isAudioUrl(href: string | null | undefined): boolean {
   } catch { return false; }
 }
 
-function isTrackUrl(href: string | null | undefined): boolean {
-  if (!href) return false;
-  try {
-    const u = new URL(href);
-    return (u.hostname === 'sevilmusics.com' || u.hostname === 'www.sevilmusics.com')
-      && u.pathname.includes('/article/');
-  } catch { return false; }
-}
-
 function absoluteUrl(href: string | null | undefined, base: string): string | null {
   if (!href) return null;
   try { return new URL(href, base).toString(); } catch { return null; }
 }
 
-async function fetchPage(url: string): Promise<Document> {
-  const res = await fetch(proxied(url));
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const html = await res.text();
-  return new DOMParser().parseFromString(html, 'text/html');
-}
-
 function extractStreams(doc: Document, pageUrl: string): string[] {
   const urls = new Set<string>();
-
   doc.querySelectorAll('audio[src], audio > source[src], source[src]').forEach(el => {
     const src = absoluteUrl(el.getAttribute('src'), pageUrl);
     if (isAudioUrl(src)) urls.add(src!);
   });
-
-  const ogAudio = doc.querySelector("meta[property='og:audio']")?.getAttribute('content');
-  const ogAbs = absoluteUrl(ogAudio, pageUrl);
-  if (isAudioUrl(ogAbs)) urls.add(ogAbs!);
-
+  const ogAudio = absoluteUrl(doc.querySelector("meta[property='og:audio']")?.getAttribute('content'), pageUrl);
+  if (isAudioUrl(ogAudio)) urls.add(ogAudio!);
   doc.querySelectorAll('a[href]').forEach(el => {
     const href = absoluteUrl(el.getAttribute('href'), pageUrl);
     if (isAudioUrl(href)) urls.add(href!);
   });
-
   return Array.from(urls);
 }
 
-async function scrapeTrack(pageUrl: string): Promise<Track | null> {
-  const doc = await fetchPage(pageUrl);
-
-  const title =
-    doc.querySelector('h1')?.textContent?.trim() ||
-    doc.querySelector("meta[property='og:title']")?.getAttribute('content') ||
-    doc.querySelector('title')?.textContent?.trim() ||
-    '';
-
-  const cover =
-    absoluteUrl(doc.querySelector("meta[property='og:image']")?.getAttribute('content'), pageUrl) ||
-    absoluteUrl((doc.querySelector('article img') as HTMLImageElement | null)?.getAttribute('src'), pageUrl) ||
-    '';
-
+function extractArtist(doc: Document): string {
   let artist = '';
   doc.querySelectorAll('a[href]').forEach(el => {
     if (artist) return;
@@ -82,54 +60,40 @@ async function scrapeTrack(pageUrl: string): Promise<Track | null> {
       if (text) artist = text;
     }
   });
+  return artist;
+}
 
-  const streams = extractStreams(doc, pageUrl);
-  if (streams.length === 0) return null;
-
-  const slug = pageUrl.replace(/\/$/, '').split('/').pop() || pageUrl;
+function postToTrack(post: WPPost): Track | null {
+  const title = decodeHtml(post.title.rendered);
+  const imageUrl = post._embedded?.['wp:featuredmedia']?.[0]?.source_url || '';
+  const doc = new DOMParser().parseFromString(post.content.rendered, 'text/html');
+  const streams = extractStreams(doc, post.link);
+  if (!streams.length) return null;
   return {
-    id: `sevilmusic_${slug}`,
-    title: title || slug,
-    artist: artist || 'SevilMusic',
+    id: `sevilmusic_${post.id}`,
+    title,
+    artist: extractArtist(doc) || 'SevilMusic',
     album: '',
     duration: 0,
-    imageUrl: cover || '',
+    imageUrl,
     audioUrl: streams[0],
     source: 'sevilmusic',
   };
 }
 
-async function collectTrackUrls(doc: Document, limit = 10): Promise<string[]> {
-  const seen = new Set<string>();
-  const urls: string[] = [];
-  doc.querySelectorAll('a[href]').forEach(el => {
-    const href = absoluteUrl(el.getAttribute('href'), BASE);
-    if (href && isTrackUrl(href) && !seen.has(href)) {
-      seen.add(href);
-      urls.push(href);
-    }
-  });
-  return urls.slice(0, limit);
-}
-
-async function scrapePageUrls(url: string, limit: number): Promise<Track[]> {
-  const doc = await fetchPage(url);
-  const pageUrls = await collectTrackUrls(doc, limit);
-  const results = await Promise.allSettled(pageUrls.map(u => scrapeTrack(u)));
-  return results
-    .filter((r): r is PromiseFulfilledResult<Track | null> => r.status === 'fulfilled' && r.value !== null)
-    .map(r => r.value!);
+async function fetchWpPosts(params: string): Promise<WPPost[]> {
+  const url = `${BASE}/wp-json/wp/v2/posts?${params}&_embed=wp:featuredmedia`;
+  const res = await fetch(proxied(url), { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<WPPost[]>;
 }
 
 export async function getRecentSevilMusicTracks(limit = 10): Promise<Track[]> {
-  // Try category page first, fall back to homepage
-  try {
-    const tracks = await scrapePageUrls(`${BASE}/category/music/`, limit);
-    if (tracks.length) return tracks;
-  } catch {}
-  return scrapePageUrls(BASE, limit);
+  const posts = await fetchWpPosts(`per_page=${limit}`);
+  return posts.map(postToTrack).filter((t): t is Track => t !== null);
 }
 
 export async function searchSevilMusic(query: string): Promise<Track[]> {
-  return scrapePageUrls(`${BASE}/?s=${encodeURIComponent(query)}`, 8);
+  const posts = await fetchWpPosts(`search=${encodeURIComponent(query)}&per_page=10`);
+  return posts.map(postToTrack).filter((t): t is Track => t !== null);
 }

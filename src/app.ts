@@ -15,8 +15,8 @@ import { searchDeezer, getDeezerIranianCharts } from './api/deezer'
 import { searchSoundCloud } from './api/soundcloud'
 import { searchSpotify } from './api/spotify'
 import { searchAudius, getTrendingAudius } from './api/audius'
-import { searchBiaMusic } from './api/biamusic'
-import { searchSevilMusic } from './api/sevilmusic'
+import { searchBiaMusic, getRecentBiaMusicTracks } from './api/biamusic'
+import { searchSevilMusic, getRecentSevilMusicTracks } from './api/sevilmusic'
 import { getTopRecordings, getTopArtists } from './api/listenbrainz'
 import { getSyncedLyrics } from './api/lrclib'
 import type { LyricLine } from './api/lrclib'
@@ -350,6 +350,20 @@ function renderHomeView(): HTMLElement {
     searchNex1Music('ایرانی').then(r => store.setSearchResults('موزیک ایرانی', r)).catch(() => store.setSearchError('خطا'));
   });
 
+  // BiaMusic recent section
+  const { section: biamusicSection, row: biamusicRow } = renderSection('جدیدترین آهنگ‌های بیاموزیک', () => {
+    store.setSearchLoading(true);
+    store.setView('search');
+    getRecentBiaMusicTracks(20).then(r => store.setSearchResults('بیاموزیک', r)).catch(() => store.setSearchError('خطا'));
+  });
+
+  // SevilMusic recent section
+  const { section: sevilSection, row: sevilRow } = renderSection('جدیدترین آهنگ‌های سویل موزیک', () => {
+    store.setSearchLoading(true);
+    store.setView('search');
+    getRecentSevilMusicTracks(20).then(r => store.setSearchResults('سویل موزیک', r)).catch(() => store.setSearchError('خطا'));
+  });
+
   // Global trending (ListenBrainz top tracks)
   const { section: trendingSection, row: trendingRow } = renderSection('ترندهای هفته جهانی', () => {
     store.setSearchLoading(true);
@@ -369,7 +383,7 @@ function renderHomeView(): HTMLElement {
   }
   podcastSection.append(podcastHeader, podcastRow);
 
-  view.append(topSongsSection, artistsSection, topAlbumsSection, iranianSection, trendingSection, podcastSection);
+  view.append(topSongsSection, artistsSection, topAlbumsSection, iranianSection, biamusicSection, sevilSection, trendingSection, podcastSection);
   view.appendChild(renderGenresSection());
 
   // Load chart data (iTunes charts for songs/albums/quick-grid)
@@ -424,6 +438,31 @@ function renderHomeView(): HTMLElement {
     .catch(() => {
       iranianRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
     });
+
+  // BiaMusic recent tracks
+  const { settings: s } = store.getState();
+  if (s.enabledSources.biamusic) {
+    getRecentBiaMusicTracks(10)
+      .then(tracks => {
+        if (tracks.length) fillTrackRow(biamusicRow, tracks);
+        else biamusicRow.innerHTML = `<p class="section-error">آهنگی یافت نشد</p>`;
+      })
+      .catch(() => { biamusicRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`; });
+  } else {
+    biamusicSection.style.display = 'none';
+  }
+
+  // SevilMusic recent tracks
+  if (s.enabledSources.sevilmusic) {
+    getRecentSevilMusicTracks(10)
+      .then(tracks => {
+        if (tracks.length) fillTrackRow(sevilRow, tracks);
+        else sevilRow.innerHTML = `<p class="section-error">آهنگی یافت نشد</p>`;
+      })
+      .catch(() => { sevilRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`; });
+  } else {
+    sevilSection.style.display = 'none';
+  }
 
   // Trending: ListenBrainz top recordings enriched with JioSaavn audio, fallback to Audius
   void (async () => {

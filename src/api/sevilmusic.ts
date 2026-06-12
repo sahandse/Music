@@ -99,24 +99,37 @@ async function scrapeTrack(pageUrl: string): Promise<Track | null> {
   };
 }
 
-export async function searchSevilMusic(query: string): Promise<Track[]> {
-  const searchUrl = `${BASE}/?s=${encodeURIComponent(query)}`;
-  const doc = await fetchPage(searchUrl);
-
+async function collectTrackUrls(doc: Document, limit = 10): Promise<string[]> {
   const seen = new Set<string>();
-  const pageUrls: string[] = [];
-
+  const urls: string[] = [];
   doc.querySelectorAll('a[href]').forEach(el => {
     const href = absoluteUrl(el.getAttribute('href'), BASE);
     if (href && isTrackUrl(href) && !seen.has(href)) {
       seen.add(href);
-      pageUrls.push(href);
+      urls.push(href);
     }
   });
+  return urls.slice(0, limit);
+}
 
-  const limited = pageUrls.slice(0, 8);
-  const results = await Promise.allSettled(limited.map(url => scrapeTrack(url)));
+async function scrapePageUrls(url: string, limit: number): Promise<Track[]> {
+  const doc = await fetchPage(url);
+  const pageUrls = await collectTrackUrls(doc, limit);
+  const results = await Promise.allSettled(pageUrls.map(u => scrapeTrack(u)));
   return results
     .filter((r): r is PromiseFulfilledResult<Track | null> => r.status === 'fulfilled' && r.value !== null)
     .map(r => r.value!);
+}
+
+export async function getRecentSevilMusicTracks(limit = 10): Promise<Track[]> {
+  // Try category page first, fall back to homepage
+  try {
+    const tracks = await scrapePageUrls(`${BASE}/category/music/`, limit);
+    if (tracks.length) return tracks;
+  } catch {}
+  return scrapePageUrls(BASE, limit);
+}
+
+export async function searchSevilMusic(query: string): Promise<Track[]> {
+  return scrapePageUrls(`${BASE}/?s=${encodeURIComponent(query)}`, 8);
 }

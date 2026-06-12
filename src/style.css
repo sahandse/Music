@@ -763,6 +763,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .source-tag--soundcloud { background: rgba(255,85,0,0.15); color: #ff5500; }
 .source-tag--spotify { background: rgba(29,185,84,0.15); color: #1db954; }
 .source-tag--audius { background: rgba(204,15,224,0.15); color: #cc0fe0; }
+.source-tag--biamusic { background: rgba(14,165,233,0.15); color: #0ea5e9; }
+.source-tag--sevilmusic { background: rgba(245,158,11,0.15); color: #f59e0b; }
 
 /* ── Buttons ── */
 .btn-icon {

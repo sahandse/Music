@@ -15,6 +15,8 @@ import { searchDeezer, getDeezerIranianCharts } from './api/deezer'
 import { searchSoundCloud } from './api/soundcloud'
 import { searchSpotify } from './api/spotify'
 import { searchAudius, getTrendingAudius } from './api/audius'
+import { searchBiaMusic } from './api/biamusic'
+import { searchSevilMusic } from './api/sevilmusic'
 import { getTopRecordings, getTopArtists } from './api/listenbrainz'
 import { getSyncedLyrics } from './api/lrclib'
 import type { LyricLine } from './api/lrclib'
@@ -40,6 +42,8 @@ function sourceLabel(source: string): string {
     soundcloud: 'SoundCloud',
     spotify: 'Spotify',
     audius: 'Audius',
+    biamusic: 'بیاموزیک',
+    sevilmusic: 'سویل موزیک',
   }[source] ?? source;
 }
 
@@ -765,6 +769,8 @@ async function performSearch(query: string): Promise<void> {
   if (enabledSources.audius) promises.push(searchAudius(query).catch(() => []));
   if (enabledSources.soundcloud) promises.push(searchSoundCloud(query, settings.soundcloudClientId).catch(() => []));
   if (enabledSources.spotify) promises.push(searchSpotify(query, settings.spotifyClientId, settings.spotifyClientSecret).catch(() => []));
+  if (enabledSources.biamusic) promises.push(searchBiaMusic(query).catch(() => []));
+  if (enabledSources.sevilmusic) promises.push(searchSevilMusic(query).catch(() => []));
   if (enabledSources.audiomack && audiomackKey && audiomackSecret) {
     promises.push(searchAudiomack(query, audiomackKey, audiomackSecret).catch(() => []));
   }
@@ -915,6 +921,14 @@ function renderSettings(): HTMLElement {
           <span class="source-toggle__dot" style="background:#ec4899"></span>
           <span class="source-toggle__label">MusicAPI</span>
         </label>
+        <label class="source-toggle"><input type="checkbox" id="src-biamusic" ${settings.enabledSources.biamusic ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#0ea5e9"></span>
+          <span class="source-toggle__label">بیاموزیک</span>
+        </label>
+        <label class="source-toggle"><input type="checkbox" id="src-sevilmusic" ${settings.enabledSources.sevilmusic ? 'checked' : ''}/>
+          <span class="source-toggle__dot" style="background:#f59e0b"></span>
+          <span class="source-toggle__label">سویل موزیک</span>
+        </label>
       </div>
     </div>
     <div class="settings-footer">
@@ -945,6 +959,8 @@ function renderSettings(): HTMLElement {
         majidapi: (modal.querySelector('#src-majidapi') as HTMLInputElement).checked,
         deezer: (modal.querySelector('#src-deezer') as HTMLInputElement).checked,
         audius: (modal.querySelector('#src-audius') as HTMLInputElement).checked,
+        biamusic: (modal.querySelector('#src-biamusic') as HTMLInputElement).checked,
+        sevilmusic: (modal.querySelector('#src-sevilmusic') as HTMLInputElement).checked,
         audiomack: cur.enabledSources.audiomack,
         soundcloud: cur.enabledSources.soundcloud,
         spotify: cur.enabledSources.spotify,

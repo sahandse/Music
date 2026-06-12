@@ -46,6 +46,8 @@ function loadSettings(): Settings {
       soundcloud: true,
       spotify: true,
       audius: true,
+      biamusic: true,
+      sevilmusic: true,
     },
   };
   try {

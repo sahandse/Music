@@ -44,6 +44,7 @@ export interface Settings {
   soundcloudClientId: string;
   spotifyClientId: string;
   spotifyClientSecret: string;
+  persianProxyUrl: string; // optional Cloudflare Worker URL for BiaMusic/SevilMusic
   enabledSources: Record<Source, boolean>;
 }
 

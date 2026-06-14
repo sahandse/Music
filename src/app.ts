@@ -15,8 +15,8 @@ import { searchDeezer, getDeezerIranianCharts } from './api/deezer'
 import { searchSoundCloud } from './api/soundcloud'
 import { searchSpotify } from './api/spotify'
 import { searchAudius, getTrendingAudius } from './api/audius'
-import { searchBiaMusic, getRecentBiaMusicTracks } from './api/biamusic'
-import { searchSevilMusic, getRecentSevilMusicTracks } from './api/sevilmusic'
+import { searchBiaMusic, getRecentBiaMusicTracks, setBiaMusicProxy } from './api/biamusic'
+import { searchSevilMusic, getRecentSevilMusicTracks, setSevilMusicProxy } from './api/sevilmusic'
 import { getTopRecordings, getTopArtists } from './api/listenbrainz'
 import { getSyncedLyrics } from './api/lrclib'
 import type { LyricLine } from './api/lrclib'
@@ -795,29 +795,43 @@ async function performSearch(query: string): Promise<void> {
   store.setSearchLoading(true);
   const { settings } = store.getState();
   const { enabledSources, jamendoClientId, jiosaavnUrl, audiomackKey, audiomackSecret } = settings;
-  const promises: Promise<Track[]>[] = [];
-  if (enabledSources.itunes) promises.push(searchItunes(query).catch(() => []));
-  if (enabledSources.jamendo && jamendoClientId) promises.push(searchJamendo(query, jamendoClientId).catch(() => []));
-  if (enabledSources.jiosaavn) promises.push(searchJioSaavn(query, jiosaavnUrl).catch(() => []));
-  if (enabledSources.musicapi) promises.push(searchMusicApi(query).catch(() => []));
-  if (enabledSources.musicbrainz) promises.push(searchMusicBrainz(query, jiosaavnUrl).catch(() => []));
-  if (enabledSources.nex1music) promises.push(searchNex1Music(query).catch(() => []));
-  if (enabledSources.hivefy) promises.push(searchHivefy(query).catch(() => []));
-  if (enabledSources.majidapi) promises.push(searchMajidApi(query).catch(() => []));
-  if (enabledSources.deezer) promises.push(searchDeezer(query).catch(() => []));
-  if (enabledSources.audius) promises.push(searchAudius(query).catch(() => []));
-  if (enabledSources.soundcloud) promises.push(searchSoundCloud(query, settings.soundcloudClientId).catch(() => []));
-  if (enabledSources.spotify) promises.push(searchSpotify(query, settings.spotifyClientId, settings.spotifyClientSecret).catch(() => []));
-  if (enabledSources.biamusic) promises.push(searchBiaMusic(query).catch(() => []));
-  if (enabledSources.sevilmusic) promises.push(searchSevilMusic(query).catch(() => []));
+
+  // Fast tier: indexed APIs that respond quickly
+  const fast: Promise<Track[]>[] = [];
+  if (enabledSources.jiosaavn) fast.push(searchJioSaavn(query, jiosaavnUrl).catch(() => []));
+  if (enabledSources.hivefy) fast.push(searchHivefy(query).catch(() => []));
+  if (enabledSources.majidapi) fast.push(searchMajidApi(query).catch(() => []));
+  if (enabledSources.biamusic) fast.push(searchBiaMusic(query).catch(() => []));
+  if (enabledSources.sevilmusic) fast.push(searchSevilMusic(query).catch(() => []));
+  if (enabledSources.nex1music) fast.push(searchNex1Music(query).catch(() => []));
+  if (enabledSources.audius) fast.push(searchAudius(query).catch(() => []));
+
+  // Slow tier: heavier APIs loaded after fast results are shown
+  const slow: Promise<Track[]>[] = [];
+  if (enabledSources.itunes) slow.push(searchItunes(query).catch(() => []));
+  if (enabledSources.deezer) slow.push(searchDeezer(query).catch(() => []));
+  if (enabledSources.musicbrainz) slow.push(searchMusicBrainz(query, jiosaavnUrl).catch(() => []));
+  if (enabledSources.jamendo && jamendoClientId) slow.push(searchJamendo(query, jamendoClientId).catch(() => []));
+  if (enabledSources.musicapi) slow.push(searchMusicApi(query).catch(() => []));
+  if (enabledSources.soundcloud) slow.push(searchSoundCloud(query, settings.soundcloudClientId).catch(() => []));
+  if (enabledSources.spotify) slow.push(searchSpotify(query, settings.spotifyClientId, settings.spotifyClientSecret).catch(() => []));
   if (enabledSources.audiomack && audiomackKey && audiomackSecret) {
-    promises.push(searchAudiomack(query, audiomackKey, audiomackSecret).catch(() => []));
+    slow.push(searchAudiomack(query, audiomackKey, audiomackSecret).catch(() => []));
   }
-  try {
-    const tracks = (await Promise.all(promises)).flat();
-    store.setSearchResults(query, tracks);
-  } catch {
-    store.setSearchError('جستجو ناموفق بود. لطفاً دوباره تلاش کنید.');
+
+  // Show fast results immediately
+  const fastTracks = (await Promise.all(fast)).flat();
+  store.setSearchResults(query, fastTracks);
+
+  // Append slow results when ready
+  if (slow.length > 0) {
+    const slowTracks = (await Promise.all(slow)).flat();
+    if (slowTracks.length > 0) {
+      const current = store.getState().search;
+      if (current.query === query) {
+        store.setSearchResults(query, [...current.results, ...slowTracks]);
+      }
+    }
   }
 }
 
@@ -970,6 +984,11 @@ function renderSettings(): HTMLElement {
         </label>
       </div>
     </div>
+    <div class="settings-section">
+      <h3 class="settings-section__title">پروکسی فارسی (اختیاری)</h3>
+      <p class="settings-section__desc">آدرس Cloudflare Worker برای بارگذاری بهتر بیاموزیک و سویل موزیک. فایل <code>workers/persian-proxy.js</code> را deploy کنید.</p>
+      <input class="settings-input" id="persian-proxy-url" type="url" placeholder="https://persian-music-proxy.your-subdomain.workers.dev" value="${settings.persianProxyUrl || ''}"/>
+    </div>
     <div class="settings-footer">
       <button class="btn-primary" id="save-settings">ذخیره</button>
     </div>`;
@@ -987,6 +1006,7 @@ function renderSettings(): HTMLElement {
       soundcloudClientId: cur.soundcloudClientId,
       spotifyClientId: cur.spotifyClientId,
       spotifyClientSecret: cur.spotifyClientSecret,
+      persianProxyUrl: (modal.querySelector('#persian-proxy-url') as HTMLInputElement).value.trim(),
       enabledSources: {
         itunes: (modal.querySelector('#src-itunes') as HTMLInputElement).checked,
         jamendo: (modal.querySelector('#src-jamendo') as HTMLInputElement).checked,
@@ -1013,6 +1033,19 @@ function renderSettings(): HTMLElement {
 // ── App Root ──────────────────────────────────────────────────────────────────
 
 export function initApp(root: HTMLElement): void {
+  // Apply saved proxy URLs on boot
+  const { persianProxyUrl } = store.getState().settings;
+  if (persianProxyUrl) {
+    setBiaMusicProxy(persianProxyUrl);
+    setSevilMusicProxy(persianProxyUrl);
+  }
+  // Re-apply when settings change
+  store.on('settings', (s: unknown) => {
+    const { persianProxyUrl: p } = s as { persianProxyUrl: string };
+    setBiaMusicProxy(p || '');
+    setSevilMusicProxy(p || '');
+  });
+
   const appEl = el('div', { class: 'app' });
   const mainContent = el('main', { class: 'main-content' });
   const sidebar = renderSidebar('home');

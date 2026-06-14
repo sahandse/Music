@@ -32,6 +32,7 @@ function loadSettings(): Settings {
     soundcloudClientId: '',
     spotifyClientId: '',
     spotifyClientSecret: '',
+    persianProxyUrl: '',
     enabledSources: {
       itunes: true,
       jamendo: true,
@@ -43,8 +44,8 @@ function loadSettings(): Settings {
       hivefy: true,
       majidapi: true,
       deezer: true,
-      soundcloud: true,
-      spotify: true,
+      soundcloud: false,
+      spotify: false,
       audius: true,
       biamusic: true,
       sevilmusic: true,

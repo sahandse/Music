@@ -37,6 +37,56 @@ function fmt(secs: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function extractAccentColor(imageUrl: string): Promise<string> {
+  return new Promise(resolve => {
+    if (!imageUrl) { resolve('#fa233b'); return; }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 50; canvas.height = 50;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve('#fa233b'); return; }
+        ctx.drawImage(img, 0, 0, 50, 50);
+        const data = ctx.getImageData(0, 0, 50, 50).data;
+        let rSum = 0, gSum = 0, bSum = 0, count = 0;
+        // Sample every 4th pixel, skip near-white and near-black
+        for (let i = 0; i < data.length; i += 16) {
+          const r = data[i], g = data[i+1], b = data[i+2];
+          const brightness = (r + g + b) / 3;
+          const saturation = Math.max(r,g,b) - Math.min(r,g,b);
+          if (brightness > 30 && brightness < 220 && saturation > 30) {
+            rSum += r; gSum += g; bSum += b; count++;
+          }
+        }
+        if (!count) { resolve('#fa233b'); return; }
+        // Boost saturation of extracted color
+        const r = Math.round(rSum / count);
+        const g = Math.round(gSum / count);
+        const b = Math.round(bSum / count);
+        const max = Math.max(r,g,b);
+        const boost = max > 0 ? Math.min(255 / max, 1.6) : 1;
+        const fr = Math.min(255, Math.round(r * boost));
+        const fg = Math.min(255, Math.round(g * boost));
+        const fb = Math.min(255, Math.round(b * boost));
+        resolve(`rgb(${fr},${fg},${fb})`);
+      } catch { resolve('#fa233b'); }
+    };
+    img.onerror = () => resolve('#fa233b');
+    img.src = imageUrl;
+  });
+}
+
+function applyAccentColor(color: string): void {
+  document.documentElement.style.setProperty('--accent', color);
+  // Also update accent background
+  const [r,g,b] = color.startsWith('rgb')
+    ? color.match(/\d+/g)!.map(Number)
+    : [250, 35, 59];
+  document.documentElement.style.setProperty('--acc-bg', `rgba(${r},${g},${b},.15)`);
+}
+
 function skeletonCards(n = 6): HTMLElement[] {
   return Array.from({ length: n }, () => {
     const c = el('div', { class: 'skel-card' });
@@ -125,6 +175,49 @@ function openCreatePlaylistModal(initialTrack?: Track): void {
   input.focus();
 }
 
+// ─── Track Details Modal ──────────────────────────────────────────────────
+
+function showTrackDetails(track: Track): void {
+  const overlay = el('div', { class: 'modal-overlay' });
+  const modal = el('div', { class: 'modal track-details-modal' });
+
+  const title = el('div', { class: 'modal__title' }, 'جزئیات آهنگ');
+  modal.appendChild(title);
+
+  const rows: [string, string][] = [
+    ['عنوان', track.title],
+    ['هنرمند', track.artist],
+    ['آلبوم', track.album || '—'],
+    ['ژانر', track.genre || '—'],
+    ['مدت زمان', track.duration ? fmt(track.duration) : '—'],
+    ['سال', track.year ? String(track.year) : '—'],
+    ['منبع', track.source === 'itunes' ? 'iTunes' : 'Apple Music'],
+  ];
+
+  const table = el('div', { class: 'track-details-table' });
+  rows.forEach(([label, value]) => {
+    const row = el('div', { class: 'track-details-row' });
+    row.appendChild(el('span', { class: 'track-details-label' }, label));
+    row.appendChild(el('span', { class: 'track-details-value' }, value));
+    table.appendChild(row);
+  });
+  modal.appendChild(table);
+
+  // Artwork
+  if (track.imageUrl) {
+    const img = el('img', { class: 'track-details-art', src: art(track.imageUrl, 200), alt: track.title }) as HTMLImageElement;
+    modal.insertBefore(img, title);
+  }
+
+  const closeBtn = el('button', { class: 'modal__btn modal__btn--cancel', style: 'margin-top:16px;width:100%' }, 'بستن');
+  closeBtn.addEventListener('click', () => overlay.remove());
+  modal.appendChild(closeBtn);
+
+  overlay.appendChild(modal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
 // ─── Context Menu ─────────────────────────────────────────────────────────
 
 function openTrackContextMenu(track: Track, anchor: HTMLElement, _queue?: Track[]): void {
@@ -169,6 +262,16 @@ function openTrackContextMenu(track: Track, anchor: HTMLElement, _queue?: Track[
     openCreatePlaylistModal(track);
   });
   menu.appendChild(newPlItem);
+
+  // Track details
+  const detailsSep = el('div', { class: 'context-menu__sep' });
+  menu.appendChild(detailsSep);
+  const detailsItem = el('div', { class: 'context-menu__item' }, 'جزئیات آهنگ');
+  detailsItem.addEventListener('click', () => {
+    menu.remove();
+    showTrackDetails(track);
+  });
+  menu.appendChild(detailsItem);
 
   // Position menu
   const rect = anchor.getBoundingClientRect();
@@ -851,6 +954,7 @@ async function renderHomeView(): Promise<HTMLElement> {
   const hotSec     = renderSection('داغ‌ترین آهنگ‌ها',      'track', () => store.navigateTo({ view: 'genre', context: { genre: 'پاپ' } }));
   const newSec     = renderSection('جدیدترین آلبوم‌ها',     'album', () => store.setView('browse'));
   const vidSec     = renderSection('برترین موزیک ویدیوها',  'video', () => store.setView('browse'));
+  const vidSec2    = renderSection('موزیک ویدیوهای جدید',   'video', () => store.navigateTo({ view: 'browse' }));
   const persianSec2 = renderSection('موزیک ایرانی 🇮🇷',     'track', () => store.navigateTo({ view: 'genre', context: { genre: 'ایرانی' } }));
   const popSec     = renderSection('پاپ برتر',              'track', () => store.navigateTo({ view: 'genre', context: { genre: 'پاپ' } }));
   const rockSec    = renderSection('راک',                   'track', () => store.navigateTo({ view: 'genre', context: { genre: 'راک' } }));
@@ -859,10 +963,16 @@ async function renderHomeView(): Promise<HTMLElement> {
   const classicSec = renderSection('کلاسیک‌های موسیقی',     'track', () => store.navigateTo({ view: 'genre', context: { genre: 'کلاسیک' } }));
   const elecSec    = renderSection('موزیک الکترونیک',       'track', () => store.navigateTo({ view: 'genre', context: { genre: 'الکترونیک' } }));
   const worldSec   = renderSection('جدیدترین‌های جهانی',    'track', () => store.navigateTo({ view: 'genre', context: { genre: 'ایندی' } }));
+  const jazSec     = renderSection('جاز',                   'track', () => store.navigateTo({ view: 'genre', context: { genre: 'جاز' } }));
+  const latinSec   = renderSection('لاتین',                  'track', () => store.navigateTo({ view: 'genre', context: { genre: 'لاتین' } }));
+  const indieSec   = renderSection('ایندی',                  'track', () => store.navigateTo({ view: 'genre', context: { genre: 'ایندی' } }));
+  const kpopSec    = renderSection('کی‌پاپ',                 'track', () => store.navigateTo({ view: 'genre', context: { genre: 'کیپاپ' } }));
+  const acousticSec = renderSection('آکوستیک',               'track', () => store.navigateTo({ view: 'genre', context: { genre: 'ایندی' } }));
 
   view.appendChild(hotSec.el);
   view.appendChild(newSec.el);
   view.appendChild(vidSec.el);
+  view.appendChild(vidSec2.el);
   view.appendChild(persianSec2.el);
 
   // Artists section
@@ -882,6 +992,11 @@ async function renderHomeView(): Promise<HTMLElement> {
   view.appendChild(classicSec.el);
   view.appendChild(elecSec.el);
   view.appendChild(worldSec.el);
+  view.appendChild(jazSec.el);
+  view.appendChild(latinSec.el);
+  view.appendChild(indieSec.el);
+  view.appendChild(kpopSec.el);
+  view.appendChild(acousticSec.el);
 
   // Hot tracks
   const songsQueries = ['top songs', 'billboard hot 100', 'best music 2024'];
@@ -934,6 +1049,9 @@ async function renderHomeView(): Promise<HTMLElement> {
     enrichWithPreviews(tracks, enriched => vidSec.fill(enriched));
   });
 
+  // Second video section
+  searchMusicVideos('new music video 2024', 20).then(v => { if (v.length) vidSec2.fill(v); });
+
   // Genre sections
   searchItunes('pop music', 20).then(t => { if (t.length) popSec.fill(t); });
   searchItunes('rock music', 20).then(t => { if (t.length) rockSec.fill(t); });
@@ -942,6 +1060,11 @@ async function renderHomeView(): Promise<HTMLElement> {
   searchItunes('classical music', 20).then(t => { if (t.length) classicSec.fill(t); });
   searchItunes('electronic music', 20).then(t => { if (t.length) elecSec.fill(t); });
   searchItunes('world music 2024', 20).then(t => { if (t.length) worldSec.fill(t); });
+  searchItunes('jazz music', 20).then(t => { if (t.length) jazSec.fill(t); });
+  searchItunes('latin pop music', 20).then(t => { if (t.length) latinSec.fill(t); });
+  searchItunes('indie alternative music', 20).then(t => { if (t.length) indieSec.fill(t); });
+  searchItunes('kpop 2024', 20).then(t => { if (t.length) kpopSec.fill(t); });
+  searchItunes('acoustic guitar music', 20).then(t => { if (t.length) acousticSec.fill(t); });
 
   // Artists section — fetch multiple queries in parallel, dedupe, shuffle
   const artistQueries = ['pop', 'rock', 'hip hop', 'r&b', 'electronic', 'jazz', 'country', 'latin', 'indie', 'k-pop'];
@@ -1005,7 +1128,37 @@ async function renderBrowseView(): Promise<HTMLElement> {
   let activeKey = 'top';
   let topLoaded: Track[] = [];
   let newLoaded: Album[] = [];
-  let vidLoaded: Track[] = [];
+
+  // Video tab state
+  const vidQueries = ['official music video 2024', 'music video vevo', 'new music video'];
+  let vidAllLoaded: Track[] = [];
+  let vidGridEl: HTMLElement | null = null;
+
+  async function loadMoreVideos(): Promise<void> {
+    const offset = vidAllLoaded.length;
+    const q = vidQueries[Math.floor(offset / 20) % vidQueries.length];
+    const more = await searchMusicVideos(q, 20);
+    const seen = new Set(vidAllLoaded.map(t => t.id));
+    const fresh = more.filter(t => !seen.has(t.id));
+    vidAllLoaded = [...vidAllLoaded, ...fresh];
+    if (vidGridEl) fresh.forEach(t => vidGridEl!.appendChild(renderVideoCard(t)));
+  }
+
+  function renderVidTab(): void {
+    content.innerHTML = '';
+    const h = el('h2', { style: 'font-size:20px;font-weight:800;margin-bottom:16px' }, 'موزیک ویدیوها');
+    content.appendChild(h);
+
+    if (!vidAllLoaded.length) {
+      content.innerHTML = '<div style="padding:40px;color:var(--text2);text-align:center">در حال بارگذاری...</div>';
+      return;
+    }
+
+    vidGridEl = el('div', { class: 'video-grid' });
+    vidAllLoaded.forEach(t => vidGridEl!.appendChild(renderVideoCard(t)));
+    content.appendChild(vidGridEl);
+    content.appendChild(renderLoadMoreBtn(async () => { await loadMoreVideos(); }));
+  }
 
   function renderTopTab(): void {
     content.innerHTML = '';
@@ -1044,29 +1197,7 @@ async function renderBrowseView(): Promise<HTMLElement> {
         content.appendChild(grid);
       }
     } else if (key === 'videos') {
-      if (!vidLoaded.length) {
-        content.innerHTML = '<div style="padding:40px;color:var(--text2);text-align:center">در حال بارگذاری...</div>';
-      } else {
-        const h = el('h2', { style: 'font-size:20px;font-weight:800;margin-bottom:16px' }, 'برترین موزیک ویدیوها');
-        const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px' });
-        const initialCount = 20;
-        let shownCount = 0;
-        const showBatch = (items: Track[], from: number, count: number) => {
-          items.slice(from, from + count).forEach(t => grid.appendChild(renderVideoCard(t)));
-          shownCount = from + count;
-        };
-        showBatch(vidLoaded, 0, initialCount);
-        content.appendChild(h);
-        content.appendChild(grid);
-
-        if (vidLoaded.length > initialCount) {
-          const loadMoreBtn = renderLoadMoreBtn(async () => {
-            showBatch(vidLoaded, shownCount, 20);
-            if (shownCount >= vidLoaded.length) loadMoreBtn.remove();
-          });
-          content.appendChild(loadMoreBtn);
-        }
-      }
+      renderVidTab();
     } else if (key === 'genres') {
       const genreList = [
         { label: 'پاپ', query: 'pop music' },
@@ -1123,13 +1254,9 @@ async function renderBrowseView(): Promise<HTMLElement> {
     if (activeKey === 'new') renderTab('new');
   });
 
-  getTopVideos(25).then(tracks => {
-    vidLoaded = tracks;
-    if (activeKey === 'videos') renderTab('videos');
-    enrichWithPreviews(tracks, enriched => {
-      vidLoaded = enriched;
-      if (activeKey === 'videos') renderTab('videos');
-    });
+  // Initial video load for browse tab
+  loadMoreVideos().then(() => {
+    if (activeKey === 'videos') renderVidTab();
   });
 
   return view;
@@ -1773,6 +1900,20 @@ export function initApp(root: HTMLElement): void {
         const newQueue = [...ps.queue, ...more];
         store.updatePlayer({ queue: newQueue });
       }
+    }
+  });
+
+  // Dynamic accent color from artwork
+  let lastAccentTrackId = '';
+  store.on<PlayerState>('player', async ps => {
+    const t = ps.currentTrack;
+    if (t && t.id !== lastAccentTrackId) {
+      lastAccentTrackId = t.id;
+      const color = await extractAccentColor(art(t.imageUrl, 100));
+      applyAccentColor(color);
+    } else if (!t) {
+      lastAccentTrackId = '';
+      applyAccentColor('#fa233b');
     }
   });
 

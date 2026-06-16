@@ -580,6 +580,32 @@ input, textarea { font-family: inherit; }
 }
 .genre-card:hover { background: var(--border); transform: scale(1.03); }
 
+/* ─── Track Details Modal ─────────────────────────────────────────────────── */
+.track-details-modal { max-width: 340px; }
+.track-details-art {
+  width: 120px; height: 120px; border-radius: 12px;
+  object-fit: cover; margin: 0 auto 16px; display: block;
+}
+.track-details-table { display: flex; flex-direction: column; gap: 10px; }
+.track-details-row {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 12px; font-size: 14px;
+  padding-bottom: 10px; border-bottom: 1px solid var(--border);
+}
+.track-details-row:last-child { border-bottom: none; padding-bottom: 0; }
+.track-details-label { color: var(--text2); flex-shrink: 0; font-size: 12px; font-weight: 600; }
+.track-details-value { color: var(--text); font-weight: 600; text-align: left; }
+
+/* ─── Video Grid ──────────────────────────────────────────────────────────── */
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.video-grid .video-card { flex: unset; width: 100%; }
+.video-grid .video-card__art { width: 100%; height: auto; aspect-ratio: 16/9; }
+
 /* ─── Responsive / Mobile ─────────────────────────────────────────────── */
 :root { --bottom-nav-h: 60px; }
 
@@ -717,6 +743,9 @@ input, textarea { font-family: inherit; }
 
   /* ── Genre Grid ── */
   .genre-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+  /* ── Video Grid ── */
+  .video-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 
   /* ── Back button ── */
   .back-btn { padding: 10px 0; font-size: 14px; -webkit-tap-highlight-color: transparent; }

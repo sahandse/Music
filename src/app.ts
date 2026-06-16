@@ -1,7 +1,7 @@
 import { store } from './store';
 import { player } from './player';
 import { getTopSongs, getNewAlbums, getTopVideos } from './api/apple-charts';
-import { searchItunes, searchMusicVideos, lookupByIds } from './api/itunes';
+import { searchItunes, searchMusicVideos, searchAlbums, lookupByIds } from './api/itunes';
 import { getSyncedLyrics } from './api/lrclib';
 import type { LyricLine } from './api/lrclib';
 import type { Track, Album, View, PlayerState } from './types';
@@ -310,22 +310,48 @@ async function renderHomeView(): Promise<HTMLElement> {
   view.appendChild(newSec.el);
   view.appendChild(vidSec.el);
 
-  // Load top songs + enrich
+  // Load songs: iTunes first (fast + has audioUrl), then RSS chart data on top
+  searchItunes('pop hits 2024', 25).then(quickTracks => {
+    if (quickTracks.length) {
+      heroEl.setTracks(quickTracks.slice(0, 5));
+      hotSec.fill(quickTracks);
+    }
+  });
+
   getTopSongs(25).then(tracks => {
-    heroEl.setTracks(tracks.slice(0, 5));
-    hotSec.fill(tracks);
-    enrichWithPreviews(tracks, enriched => {
-      heroEl.setTracks(enriched.slice(0, 5));
-      hotSec.fill(enriched);
-    });
+    if (!tracks.length) return;
+    // RSS tracks may have empty audioUrl — enrich before showing
+    const hasAudio = tracks.some(t => t.audioUrl);
+    if (hasAudio) {
+      heroEl.setTracks(tracks.slice(0, 5));
+      hotSec.fill(tracks);
+    } else {
+      // Show artwork immediately, enrich in background
+      hotSec.fill(tracks);
+      enrichWithPreviews(tracks, enriched => {
+        heroEl.setTracks(enriched.slice(0, 5));
+        hotSec.fill(enriched);
+      });
+    }
   });
 
   // Load new albums
-  getNewAlbums(20).then(albums => newSec.fill(albums));
+  getNewAlbums(20).then(albums => {
+    if (albums.length) newSec.fill(albums);
+  });
+  // Fallback albums if RSS slow
+  searchAlbums('new music 2025', 20).then(albums => {
+    if (albums.length && !newSec.row.querySelector('.album-card')) newSec.fill(albums);
+  });
 
-  // Load top videos + enrich
+  // Load top videos: quick fallback then RSS
+  searchMusicVideos('official music video', 16).then(vids => {
+    if (vids.length) vidSec.fill(vids);
+  });
   getTopVideos(20).then(tracks => {
-    vidSec.fill(tracks);
+    if (!tracks.length) return;
+    const hasAudio = tracks.some(t => t.audioUrl);
+    if (hasAudio) { vidSec.fill(tracks); return; }
     enrichWithPreviews(tracks, enriched => vidSec.fill(enriched));
   });
 

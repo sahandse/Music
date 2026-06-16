@@ -58,6 +58,19 @@ export async function searchMusicVideos(query: string, limit = 20): Promise<Trac
   return results.filter(i => i.previewUrl).map(i => fromItunes(i, true));
 }
 
+export async function searchAlbums(query: string, limit = 25): Promise<import('../types').Album[]> {
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=us&media=music&entity=album&limit=${limit}`;
+  const results = await itunesFetch(url);
+  return results.map(item => ({
+    id: `itunes_album_${item.collectionId || 0}`,
+    title: item.collectionName || '',
+    artist: item.artistName || '',
+    imageUrl: artworkUrl(item.artworkUrl100 || ''),
+    genre: item.primaryGenreName,
+    appleId: String(item.collectionId || 0),
+  }));
+}
+
 export async function lookupByIds(ids: string[]): Promise<Map<string, Track>> {
   const map = new Map<string, Track>();
   if (!ids.length) return map;

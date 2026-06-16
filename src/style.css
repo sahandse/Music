@@ -580,13 +580,199 @@ input, textarea { font-family: inherit; }
 }
 .genre-card:hover { background: var(--border); transform: scale(1.03); }
 
-/* ─── Responsive ──────────────────────────────────────────────────────── */
+/* ─── Responsive / Mobile ─────────────────────────────────────────────── */
+:root { --bottom-nav-h: 60px; }
+
+/* Desktop: hide bottom nav always */
+@media (min-width: 701px) {
+  .bottom-nav { display: none !important; }
+}
+
 @media (max-width: 700px) {
-  :root { --sidebar: 0px; }
+  :root { --sidebar: 0px; --mini-h: 60px; }
+
+  /* ── Hide desktop sidebar ── */
   .sidebar { display: none; }
-  .mini-player { left: 0; right: 0; }
-  .np-inner { padding: 0 18px; }
-  .np-art { width: min(240px, 80vw); height: min(240px, 80vw); }
+
+  /* ── Body safe area ── */
+  body { -webkit-text-size-adjust: 100%; }
+
+  /* ── Main content (leaves room for mini player + bottom nav + home indicator) ── */
+  .main-content {
+    padding-bottom: calc(var(--mini-h) + var(--bottom-nav-h) + env(safe-area-inset-bottom) + 16px);
+  }
+
+  /* ── Bottom Navigation Bar ── */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 110;
+    height: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: rgba(18,18,20,.95);
+    backdrop-filter: blur(24px) saturate(1.8);
+    -webkit-backdrop-filter: blur(24px) saturate(1.8);
+    border-top: 1px solid rgba(255,255,255,.08);
+    display: flex; align-items: flex-start; justify-content: space-around;
+    padding-top: 8px;
+  }
+  [data-theme="light"] .bottom-nav {
+    background: rgba(248,248,250,.95);
+    border-top-color: var(--border);
+  }
+  .bottom-nav__item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 4px 4px 0;
+    color: rgba(255,255,255,.38); font-size: 10px; font-weight: 600;
+    transition: color .15s;
+    -webkit-tap-highlight-color: transparent;
+    border: none; background: none; font-family: inherit;
+  }
+  [data-theme="light"] .bottom-nav__item { color: rgba(0,0,0,.35); }
+  .bottom-nav__item.active { color: var(--accent); }
+  .bottom-nav__item svg { width: 24px; height: 24px; margin-bottom: 1px; }
+
+  /* ── Mini Player (above bottom nav) ── */
+  .mini-player {
+    left: 8px; right: 8px;
+    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 8px);
+    border-radius: 16px;
+    box-shadow: 0 -2px 20px rgba(0,0,0,.4), 0 4px 24px rgba(0,0,0,.3);
+    overflow: hidden;
+  }
+  .mini-inner { padding: 0 10px; gap: 10px; }
+  .mini-art { width: 44px; height: 44px; }
+  .mini-controls { gap: 2px; }
+  .mini-btn { width: 34px; height: 34px; }
+  .mini-btn svg { width: 18px; height: 18px; }
+  .mini-btn.play-btn svg { width: 22px; height: 22px; }
+
+  /* ── Now Playing (full screen) ── */
+  .np-inner {
+    padding: 0 20px;
+    padding-bottom: max(env(safe-area-inset-bottom), 20px);
+  }
+  .np-header {
+    padding-top: max(env(safe-area-inset-top, 44px), 44px);
+    padding-top: calc(env(safe-area-inset-top) + 16px);
+  }
+  .np-art {
+    width: min(72vw, 280px); height: min(72vw, 280px);
+    margin: 8px auto 24px;
+  }
+  .np-title { font-size: 20px; }
+  .np-vol-row { margin-bottom: 16px; }
+  .np-extras { padding-bottom: 16px; gap: 24px; }
+
+  /* Swipe handle pill at top of now playing */
+  .np-handle {
+    width: 36px; height: 4px; background: rgba(255,255,255,.25);
+    border-radius: 2px; margin: 10px auto 0;
+    flex-shrink: 0;
+  }
+
+  /* ── Hero ── */
+  .hero { height: 240px; }
+  .hero__title { font-size: 20px; }
+  .hero__content { padding: 16px 20px; }
+
+  /* ── Section ── */
+  .section { padding: 20px 16px 8px; }
+  .section__title { font-size: 17px; }
+
+  /* ── Scroll Row cards — slightly smaller on mobile ── */
+  .track-card { flex: 0 0 138px; }
+  .track-card__art { width: 138px; height: 138px; }
+  .video-card { flex: 0 0 200px; }
+  .video-card__art { width: 200px; height: 112px; }
+  .album-card { flex: 0 0 138px; }
+  .album-card__art { width: 138px; height: 138px; }
+  .skel-card { flex: 0 0 138px; }
+  .skel-card .skel-img { width: 138px; height: 138px; }
+
+  /* Artist card (circular) */
+  .artist-card { flex: 0 0 96px; }
+  .artist-card__art { width: 80px; height: 80px; }
+
+  /* ── Track row — touch-friendly ── */
+  .track-row { padding: 10px 8px; min-height: 62px; }
+  .track-row__more { opacity: 1; } /* always visible on touch */
+  .track-row:active { background: var(--bg3); }
+
+  /* ── Browse Tabs ── */
+  .browse-tabs { padding: 12px 16px 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 8px; }
+  .browse-tabs::-webkit-scrollbar { display: none; }
+  .browse-tab { flex-shrink: 0; padding: 7px 14px; font-size: 12px; }
+
+  /* ── Search ── */
+  .search-bar-wrap { padding: 12px 16px; }
+  .search-input { height: 44px; font-size: 15px; border-radius: 12px; }
+  .results-wrap { padding: 0 16px 20px; }
+  .results-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+
+  /* ── Library ── */
+  .library-wrap { padding: 16px 16px; }
+  .library-heading { font-size: 22px; }
+
+  /* ── Load More ── */
+  .load-more-btn { max-width: 100%; border-radius: 12px; margin: 12px 0; }
+
+  /* ── Genre Grid ── */
+  .genre-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+  /* ── Back button ── */
+  .back-btn { padding: 10px 0; font-size: 14px; -webkit-tap-highlight-color: transparent; }
+
+  /* ── Artist hero ── */
+  .artist-hero { flex-direction: column; align-items: center; text-align: center; padding: 20px 16px; gap: 12px; }
+  .artist-hero__img { width: 120px; height: 120px; }
+  .artist-hero__name { font-size: 22px; }
+
+  /* ── Album hero ── */
+  .album-hero { flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+  .album-hero__img { width: 160px; height: 160px; }
+  .album-hero__title { font-size: 20px; }
+
+  /* ── Panel (lyrics / queue) ── */
+  .panel-sheet { max-height: 88vh; border-radius: 24px 24px 0 0; }
+  .panel-body { padding: 12px 16px; }
+
+  /* ── Lyrics karaoke on mobile ── */
+  .lyrics-line { font-size: 16px; }
+  .lyrics-line.active { font-size: 20px; }
+
+  /* ── Toast ── */
+  .toast {
+    bottom: calc(var(--mini-h) + var(--bottom-nav-h) + env(safe-area-inset-bottom) + 20px);
+    font-size: 13px; padding: 10px 18px;
+  }
+
+  /* ── Playlists ── */
+  .playlists-header { padding: 0; }
+  .playlist-item { padding: 10px 8px; }
+
+  /* ── Context menu bigger tap targets on mobile ── */
+  .context-menu__item { padding: 13px 18px; font-size: 15px; }
+
+  /* ── Video overlay ── */
+  .video-overlay__bar { padding-top: max(env(safe-area-inset-top, 14px), 14px); }
+}
+
+/* ─── Touch / Active States ────────────────────────────────────────────── */
+@media (hover: none) {
+  /* On pure touch devices, show play overlay on tap not hover */
+  .track-card:active .track-card__play-overlay { opacity: 1; }
+  .video-card:active .video-card__play-overlay { opacity: 1; }
+  /* Scale feedback */
+  .track-card:active { transform: scale(0.97); }
+  .album-card:active { transform: scale(0.97); }
+  .artist-card:active { transform: scale(0.95); }
+  .genre-card:active { transform: scale(0.96); }
+  .hero__play:active { transform: scale(0.96); }
+  .artist-radio-btn:active { transform: scale(0.96); }
+  .load-more-btn:active { transform: scale(0.98); }
+  /* Remove hover-only effects */
+  .track-card:hover .track-card__img { transform: none; }
+  .track-card:hover .track-card__play-overlay { opacity: 0; }
+  .video-card:hover .video-card__play-overlay { opacity: 0; }
 }
 
 /* ─── Album Hero ──────────────────────────────────────────────────────────── */

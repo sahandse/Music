@@ -1624,6 +1624,97 @@ function renderNowPlaying(): HTMLElement {
   return np;
 }
 
+// ─── Bottom Navigation (mobile) ────────────────────────────────────────────
+
+function renderBottomNav(): HTMLElement {
+  const nav = document.createElement('nav');
+  nav.className = 'bottom-nav';
+
+  const navDefs: { view: View; label: string; icon: string }[] = [
+    { view: 'home',      label: 'گوش کن',     icon: ico.home },
+    { view: 'browse',    label: 'مرور',        icon: ico.compass },
+    { view: 'search',    label: 'جستجو',       icon: ico.search },
+    { view: 'library',   label: 'کتابخانه',    icon: ico.library },
+    { view: 'playlists', label: 'پلی‌لیست',    icon: ico.list },
+  ];
+
+  const itemEls: HTMLButtonElement[] = [];
+  const baseViews: View[] = ['home', 'browse', 'search', 'library', 'playlists'];
+
+  navDefs.forEach(({ view, label, icon }) => {
+    const btn = el('button', { class: 'bottom-nav__item' }) as HTMLButtonElement;
+    const iconSpan = el('span');
+    iconSpan.innerHTML = icon;
+    btn.appendChild(iconSpan);
+    btn.appendChild(el('span', {}, label));
+    btn.addEventListener('click', () => store.setView(view));
+    nav.appendChild(btn);
+    itemEls.push(btn);
+  });
+
+  const updateActive = (v: View) => {
+    const activeView = baseViews.includes(v) ? v
+      : (['artist', 'genre', 'persian', 'album'] as View[]).includes(v) ? 'home' : 'home';
+    itemEls.forEach((btn, i) => btn.classList.toggle('active', navDefs[i].view === activeView));
+  };
+
+  store.on<View>('view', updateActive);
+  updateActive(store.currentView);
+
+  return nav;
+}
+
+// ─── Swipe / Touch helpers ──────────────────────────────────────────────────
+
+function addSwipeDown(el2: HTMLElement, onSwipe: () => void): void {
+  let startY = 0;
+  let startX = 0;
+  let dragging = false;
+  el2.addEventListener('touchstart', e => {
+    startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
+    dragging = true;
+  }, { passive: true });
+  el2.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const dy = e.touches[0].clientY - startY;
+    const dx = Math.abs(e.touches[0].clientX - startX);
+    // Only vertical swipes (more vertical than horizontal)
+    if (dy > 60 && dx < dy) { dragging = false; onSwipe(); }
+  }, { passive: true });
+  el2.addEventListener('touchend', () => { dragging = false; }, { passive: true });
+}
+
+function addSwipeUp(el2: HTMLElement, onSwipe: () => void): void {
+  let startY = 0;
+  let dragging = false;
+  el2.addEventListener('touchstart', e => {
+    startY = e.touches[0].clientY;
+    dragging = true;
+  }, { passive: true });
+  el2.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const dy = startY - e.touches[0].clientY;
+    if (dy > 50) { dragging = false; onSwipe(); }
+  }, { passive: true });
+  el2.addEventListener('touchend', () => { dragging = false; }, { passive: true });
+}
+
+function addLongPress(el2: HTMLElement, onLongPress: (x: number, y: number) => void): void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let moved = false;
+  el2.addEventListener('touchstart', e => {
+    moved = false;
+    const touch = e.touches[0];
+    timer = setTimeout(() => {
+      if (!moved) onLongPress(touch.clientX, touch.clientY);
+    }, 550);
+  }, { passive: true });
+  el2.addEventListener('touchmove', () => { moved = true; if (timer) clearTimeout(timer); }, { passive: true });
+  el2.addEventListener('touchend', () => { if (timer) clearTimeout(timer); }, { passive: true });
+  el2.addEventListener('touchcancel', () => { if (timer) clearTimeout(timer); }, { passive: true });
+}
+
 // ─── App Init ──────────────────────────────────────────────────────────────
 
 export function initApp(root: HTMLElement): void {
@@ -1635,10 +1726,19 @@ export function initApp(root: HTMLElement): void {
   const main = el('main', { class: 'main-content' });
   layout.appendChild(main);
 
+  const miniPlayerEl = renderMiniPlayer();
+  const nowPlayingEl = renderNowPlaying();
   root.appendChild(layout);
-  root.appendChild(renderMiniPlayer());
-  root.appendChild(renderNowPlaying());
+  root.appendChild(miniPlayerEl);
+  root.appendChild(nowPlayingEl);
   root.appendChild(buildVideoOverlay());
+  root.appendChild(renderBottomNav());
+
+  // Swipe up on mini player → expand now playing
+  addSwipeUp(miniPlayerEl, () => store.setPlayerExpanded(true));
+
+  // Swipe down on now playing → close
+  addSwipeDown(nowPlayingEl, () => store.setPlayerExpanded(false));
 
   let viewEl: HTMLElement | null = null;
 

@@ -1,6 +1,6 @@
 export type Source = 'itunes' | 'apple';
 export type Theme = 'dark' | 'light';
-export type View = 'home' | 'browse' | 'search' | 'library';
+export type View = 'home' | 'browse' | 'search' | 'library' | 'artist' | 'genre' | 'persian';
 export type RepeatMode = 'none' | 'one' | 'all';
 
 export interface Track {
@@ -41,8 +41,14 @@ export interface PlayerState {
   repeatMode: RepeatMode;
 }
 
+export interface NavEntry {
+  view: View;
+  context?: { artistName?: string; artistId?: string; genre?: string };
+}
+
 export interface AppState {
   currentView: View;
+  navStack: NavEntry[];
   player: PlayerState;
   favorites: Track[];
   theme: Theme;

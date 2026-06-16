@@ -512,6 +512,74 @@ input, textarea { font-family: inherit; }
 .video-overlay__title { color: #fff; font-size: 14px; font-weight: 600; }
 .video-overlay video { width: 100%; height: 100%; object-fit: contain; }
 
+/* ─── Back Button ─────────────────────────────────────────────────────────── */
+.back-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--accent); font-size: 15px; font-weight: 600;
+  padding: 8px 0; margin-bottom: 16px; background: none; border: none; cursor: pointer;
+}
+.back-btn svg { width: 20px; height: 20px; }
+.back-btn:hover { opacity: .7; }
+
+/* ─── Artist Card (circular) ──────────────────────────────────────────────── */
+.artist-card { flex: 0 0 120px; cursor: pointer; text-align: center; }
+.artist-card__art {
+  width: 100px; height: 100px; border-radius: 50%;
+  overflow: hidden; background: var(--bg3);
+  margin: 0 auto 8px;
+  border: 2px solid var(--border);
+}
+.artist-card__img { width: 100%; height: 100%; object-fit: cover; }
+.artist-card__name {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ─── Load More Button ────────────────────────────────────────────────────── */
+.load-more-btn {
+  display: block; width: 100%; max-width: 300px;
+  margin: 20px auto;
+  padding: 12px 24px;
+  background: var(--bg3); color: var(--text);
+  border-radius: 100px; font-size: 14px; font-weight: 600;
+  text-align: center; transition: background .15s;
+  border: none; cursor: pointer; font-family: inherit;
+}
+.load-more-btn:hover { background: var(--border); }
+.load-more-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ─── Artist name clickable ───────────────────────────────────────────────── */
+.track-card__artist:hover, .track-row__artist:hover,
+.video-card__artist:hover { color: var(--accent); cursor: pointer; }
+
+/* ─── Artist Page ─────────────────────────────────────────────────────────── */
+.artist-page__name {
+  font-size: 28px; font-weight: 800; margin-bottom: 20px; color: var(--text);
+}
+.artist-page__section-title {
+  font-size: 20px; font-weight: 800; margin-bottom: 16px; color: var(--text);
+}
+
+/* ─── Genre Grid ──────────────────────────────────────────────────────────── */
+.genre-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.genre-grid .track-card { flex: unset; width: 100%; }
+.genre-grid .track-card__art { width: 100%; height: auto; aspect-ratio: 1; }
+
+/* ─── Genre Card (browse grid) ───────────────────────────────────────────── */
+.genre-card {
+  padding: 24px 16px; border-radius: var(--radius);
+  background: var(--bg3); color: var(--text);
+  font-size: 15px; font-weight: 700;
+  text-align: center; cursor: pointer;
+  transition: background .15s, transform .15s;
+}
+.genre-card:hover { background: var(--border); transform: scale(1.03); }
+
 /* ─── Responsive ──────────────────────────────────────────────────────── */
 @media (max-width: 700px) {
   :root { --sidebar: 0px; }

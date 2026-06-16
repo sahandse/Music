@@ -56,8 +56,8 @@ async function itunesFetch(url: string): Promise<ItunesResult[]> {
 
 // ─── Public API ────────────────────────────────────────────────────────────
 
-export async function searchItunes(query: string, limit = 25): Promise<Track[]> {
-  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=us&media=music&entity=musicTrack&limit=${limit}&explicit=Yes`;
+export async function searchItunes(query: string, limit = 25, offset = 0): Promise<Track[]> {
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=us&media=music&entity=musicTrack&limit=${limit}&offset=${offset}&explicit=Yes`;
   const results = await itunesFetch(url);
   return results.filter(i => i.previewUrl).map(i => fromItunes(i));
 }

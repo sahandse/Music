@@ -4,7 +4,7 @@ import { getTopSongs, getNewAlbums, getTopVideos } from './api/apple-charts';
 import { searchItunes, searchMusicVideos, searchAlbums, lookupByIds } from './api/itunes';
 import { getSyncedLyrics } from './api/lrclib';
 import type { LyricLine } from './api/lrclib';
-import type { Track, Album, View, PlayerState } from './types';
+import type { Track, Album, View, PlayerState, NavEntry } from './types';
 
 // ─── Utilities ────────────────────────────────────────────────────────────
 
@@ -62,12 +62,25 @@ const ico = {
   heart: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>',
   heartOut: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>',
   chevDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>',
+  chevRight: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>',
   volLow: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.5 12A4.5 4.5 0 0016 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/></svg>',
   volHigh: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>',
   lyrics: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>',
   queue:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>',
   videoPlay: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" opacity=".3"/><path d="M10 8.5l6 3.5-6 3.5v-7z"/></svg>',
 };
+
+// ─── Back Button ───────────────────────────────────────────────────────────
+
+function renderBackButton(): HTMLElement {
+  const btn = el('button', { class: 'back-btn' });
+  const iconSpan = el('span');
+  iconSpan.innerHTML = ico.chevRight;
+  btn.appendChild(iconSpan);
+  btn.appendChild(document.createTextNode('بازگشت'));
+  btn.addEventListener('click', () => store.goBack());
+  return btn;
+}
 
 // ─── Card Components ───────────────────────────────────────────────────────
 
@@ -81,7 +94,14 @@ function renderTrackCard(track: Track): HTMLElement {
   artWrap.appendChild(overlay);
   card.appendChild(artWrap);
   card.appendChild(el('div', { class: 'track-card__title' }, track.title));
-  card.appendChild(el('div', { class: 'track-card__artist' }, track.artist));
+
+  const artistEl = el('div', { class: 'track-card__artist' }, track.artist);
+  artistEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    store.navigateTo({ view: 'artist', context: { artistName: track.artist } });
+  });
+  card.appendChild(artistEl);
+
   card.addEventListener('click', () => {
     if (track.audioUrl) player.playTrack(track);
   });
@@ -100,7 +120,14 @@ function renderVideoCard(track: Track, onClick?: () => void): HTMLElement {
   artWrap.appendChild(overlay);
   card.appendChild(artWrap);
   card.appendChild(el('div', { class: 'video-card__title' }, track.title));
-  card.appendChild(el('div', { class: 'video-card__artist' }, track.artist));
+
+  const artistEl = el('div', { class: 'video-card__artist' }, track.artist);
+  artistEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    store.navigateTo({ view: 'artist', context: { artistName: track.artist } });
+  });
+  card.appendChild(artistEl);
+
   card.addEventListener('click', () => {
     if (onClick) { onClick(); return; }
     if (track.videoUrl || track.audioUrl) openVideoOverlay(track);
@@ -127,7 +154,14 @@ function renderTrackRow(track: Track, index: number): HTMLElement {
   row.appendChild(artWrap);
   const info = el('div', { class: 'track-row__info' });
   info.appendChild(el('div', { class: 'track-row__title' }, track.title));
-  info.appendChild(el('div', { class: 'track-row__artist' }, track.artist));
+
+  const artistEl = el('div', { class: 'track-row__artist' }, track.artist);
+  artistEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    store.navigateTo({ view: 'artist', context: { artistName: track.artist } });
+  });
+  info.appendChild(artistEl);
+
   row.appendChild(info);
   if (track.duration) row.appendChild(el('div', { class: 'track-row__dur' }, fmt(track.duration)));
 
@@ -142,6 +176,19 @@ function renderTrackRow(track: Track, index: number): HTMLElement {
     if (track.audioUrl) player.playTrack(track);
   });
   return row;
+}
+
+function renderArtistCard(artistName: string, imageUrl: string): HTMLElement {
+  const card = el('div', { class: 'artist-card' });
+  const artWrap = el('div', { class: 'artist-card__art' });
+  const img = el('img', { class: 'artist-card__img', src: art(imageUrl, 300), alt: artistName, loading: 'lazy' });
+  artWrap.appendChild(img);
+  card.appendChild(artWrap);
+  card.appendChild(el('div', { class: 'artist-card__name' }, artistName));
+  card.addEventListener('click', () => {
+    store.navigateTo({ view: 'artist', context: { artistName } });
+  });
+  return card;
 }
 
 // ─── Section Helper ────────────────────────────────────────────────────────
@@ -295,6 +342,146 @@ async function enrichWithPreviews(tracks: Track[], fill: (t: Track[]) => void): 
   fill(enriched);
 }
 
+// ─── Load More Button ──────────────────────────────────────────────────────
+
+function renderLoadMoreBtn(onLoad: (btn: HTMLButtonElement) => Promise<void>): HTMLButtonElement {
+  const btn = el('button', { class: 'load-more-btn' }, 'بارگذاری بیشتر') as HTMLButtonElement;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = '...';
+    await onLoad(btn);
+    btn.disabled = false;
+    if (btn.isConnected) btn.textContent = 'بارگذاری بیشتر';
+  });
+  return btn;
+}
+
+// ─── Artist Page ───────────────────────────────────────────────────────────
+
+async function renderArtistView(artistName: string): Promise<HTMLElement> {
+  const view = el('div', { class: 'view' });
+  const wrap = el('div', { style: 'padding:20px' });
+  view.appendChild(wrap);
+
+  wrap.appendChild(renderBackButton());
+  wrap.appendChild(el('h1', { class: 'artist-page__name' }, artistName));
+
+  // Top tracks section
+  const tracksTitle = el('h2', { class: 'artist-page__section-title' }, 'آهنگ‌های برتر');
+  wrap.appendChild(tracksTitle);
+
+  const trackList = el('div', { class: 'track-list' });
+  wrap.appendChild(trackList);
+
+  let trackOffset = 0;
+  const PAGE = 20;
+
+  const loadMoreTracksBtn = renderLoadMoreBtn(async () => {
+    trackOffset += PAGE;
+    const more = await searchItunes(artistName, PAGE, trackOffset);
+    more.forEach((t, i) => trackList.appendChild(renderTrackRow(t, trackOffset + i)));
+  });
+
+  // Albums section
+  const albumsTitle = el('h2', { class: 'artist-page__section-title', style: 'margin-top:28px' }, 'آلبوم‌ها');
+  wrap.appendChild(albumsTitle);
+  const albumRow = el('div', { class: 'scroll-row' });
+  skeletonCards(4).forEach(s => albumRow.appendChild(s));
+  wrap.appendChild(albumRow);
+
+  // Load data
+  const [tracks, albums] = await Promise.all([
+    searchItunes(artistName, 50),
+    searchAlbums(artistName, 25),
+  ]);
+
+  // Filter tracks to matching artist
+  const prefix = artistName.toLowerCase().slice(0, 8);
+  let artistTracks = tracks.filter(t => t.artist.toLowerCase().includes(prefix));
+  if (!artistTracks.length) artistTracks = tracks;
+
+  const firstPage = artistTracks.slice(0, PAGE);
+  firstPage.forEach((t, i) => trackList.appendChild(renderTrackRow(t, i)));
+  wrap.insertBefore(loadMoreTracksBtn, albumsTitle);
+
+  albumRow.innerHTML = '';
+  if (albums.length) {
+    albums.forEach(a => albumRow.appendChild(renderAlbumCard(a)));
+  } else {
+    albumRow.appendChild(el('div', { style: 'color:var(--text3);padding:20px;font-size:13px' }, 'بدون نتیجه'));
+  }
+
+  return view;
+}
+
+// ─── Genre Page ────────────────────────────────────────────────────────────
+
+async function renderGenreView(initialGenre?: string): Promise<HTMLElement> {
+  const view = el('div', { class: 'view' });
+  const wrap = el('div', { style: 'padding:20px' });
+  view.appendChild(wrap);
+
+  wrap.appendChild(renderBackButton());
+
+  const genreDefs: { label: string; query: string }[] = [
+    { label: 'پاپ',       query: 'pop music' },
+    { label: 'راک',       query: 'rock music' },
+    { label: 'هیپ‌هاپ',   query: 'hip hop' },
+    { label: 'R&B',       query: 'rnb music' },
+    { label: 'الکترونیک', query: 'electronic music' },
+    { label: 'کیپاپ',     query: 'kpop' },
+    { label: 'کلاسیک',    query: 'classical music' },
+  ];
+
+  const tabs = el('div', { class: 'browse-tabs' });
+  wrap.appendChild(tabs);
+
+  const content = el('div');
+  wrap.appendChild(content);
+
+  let activeIdx = initialGenre
+    ? Math.max(0, genreDefs.findIndex(g => g.label === initialGenre))
+    : 0;
+
+  const btnEls: HTMLButtonElement[] = [];
+
+  async function loadGenre(idx: number): Promise<void> {
+    content.innerHTML = '<div style="padding:40px;color:var(--text2);text-align:center">در حال بارگذاری...</div>';
+    const { query } = genreDefs[idx];
+    const PAGE = 25;
+    let offset = 0;
+    const tracks = await searchItunes(query, PAGE, offset);
+    offset += PAGE;
+
+    content.innerHTML = '';
+    const grid = el('div', { class: 'genre-grid' });
+    tracks.forEach(t => grid.appendChild(renderTrackCard(t)));
+    content.appendChild(grid);
+
+    const loadMoreBtn = renderLoadMoreBtn(async () => {
+      const more = await searchItunes(query, PAGE, offset);
+      offset += PAGE;
+      more.forEach(t => grid.appendChild(renderTrackCard(t)));
+    });
+    content.appendChild(loadMoreBtn);
+  }
+
+  genreDefs.forEach(({ label }, i) => {
+    const btn = el('button', { class: `browse-tab${i === activeIdx ? ' active' : ''}` }, label) as HTMLButtonElement;
+    btn.addEventListener('click', () => {
+      activeIdx = i;
+      btnEls.forEach((b, bi) => b.classList.toggle('active', bi === i));
+      loadGenre(i);
+    });
+    tabs.appendChild(btn);
+    btnEls.push(btn);
+  });
+
+  await loadGenre(activeIdx);
+
+  return view;
+}
+
 // ─── Views ─────────────────────────────────────────────────────────────────
 
 async function renderHomeView(): Promise<HTMLElement> {
@@ -314,12 +501,32 @@ async function renderHomeView(): Promise<HTMLElement> {
   view.appendChild(popSec.el);
   view.appendChild(rockSec.el);
 
+  // Artists section
+  const artistsSec = el('div', { class: 'section' });
+  const artistsHeader = el('div', { class: 'section__header' });
+  artistsHeader.appendChild(el('h2', { class: 'section__title' }, 'هنرمندان برتر'));
+  artistsSec.appendChild(artistsHeader);
+  const artistsRow = el('div', { class: 'scroll-row' });
+  skeletonCards(6).forEach(s => artistsRow.appendChild(s));
+  artistsSec.appendChild(artistsRow);
+  view.appendChild(artistsSec);
+
+  // Persian music section
+  const persianSec = el('div', { class: 'section' });
+  const persianHeader = el('div', { class: 'section__header' });
+  persianHeader.appendChild(el('h2', { class: 'section__title' }, 'موزیک ایرانی 🇮🇷'));
+  persianSec.appendChild(persianHeader);
+  const persianRow = el('div', { class: 'scroll-row' });
+  skeletonCards(6).forEach(s => persianRow.appendChild(s));
+  persianSec.appendChild(persianRow);
+  view.appendChild(persianSec);
+
   // All sections load in parallel — first result wins for each slot
   const songsQueries = ['top songs', 'billboard hot 100', 'best music 2024'];
   const albumQueries = ['best albums 2024', 'new releases music', 'popular albums'];
   const videoQueries = ['official music video 2024', 'vevo music video', 'music video'];
 
-  // Hot tracks: try multiple queries until we get results
+  // Hot tracks
   (async () => {
     for (const q of songsQueries) {
       const tracks = await searchItunes(q, 25);
@@ -367,9 +574,47 @@ async function renderHomeView(): Promise<HTMLElement> {
     enrichWithPreviews(tracks, enriched => vidSec.fill(enriched));
   });
 
-  // Pop & Rock sections (always from iTunes — always have audioUrl)
+  // Pop & Rock sections
   searchItunes('pop music', 20).then(t => { if (t.length) popSec.fill(t); });
   searchItunes('rock music', 20).then(t => { if (t.length) rockSec.fill(t); });
+
+  // Artists section
+  searchItunes('top artists', 20).then(tracks => {
+    const seen = new Set<string>();
+    const unique: Array<{ name: string; imageUrl: string }> = [];
+    for (const t of tracks) {
+      if (!seen.has(t.artist)) {
+        seen.add(t.artist);
+        unique.push({ name: t.artist, imageUrl: t.imageUrl });
+      }
+    }
+    artistsRow.innerHTML = '';
+    if (unique.length) {
+      unique.forEach(a => artistsRow.appendChild(renderArtistCard(a.name, a.imageUrl)));
+    } else {
+      artistsRow.appendChild(el('div', { style: 'color:var(--text3);padding:20px;font-size:13px' }, 'بدون نتیجه'));
+    }
+  });
+
+  // Persian music section
+  (async () => {
+    const persianQueries = [
+      () => searchItunes('persian pop', 20),
+      () => searchItunes('iranian music', 20),
+      () => searchItunes('ایرانی', 20),
+      () => searchItunes('googoosh', 10),
+    ];
+    for (const queryFn of persianQueries) {
+      const tracks = await queryFn();
+      if (tracks.length) {
+        persianRow.innerHTML = '';
+        tracks.forEach(t => persianRow.appendChild(renderTrackCard(t)));
+        return;
+      }
+    }
+    persianRow.innerHTML = '';
+    persianRow.appendChild(el('div', { style: 'color:var(--text3);padding:20px;font-size:13px' }, 'بدون نتیجه'));
+  })();
 
   return view;
 }
@@ -382,6 +627,7 @@ async function renderBrowseView(): Promise<HTMLElement> {
     { label: 'برترین‌ها', key: 'top' },
     { label: 'جدیدترین‌ها', key: 'new' },
     { label: 'موزیک‌ویدیو', key: 'videos' },
+    { label: 'ژانرها', key: 'genres' },
   ];
   view.appendChild(tabs);
 
@@ -393,18 +639,32 @@ async function renderBrowseView(): Promise<HTMLElement> {
   let newLoaded: Album[] = [];
   let vidLoaded: Track[] = [];
 
+  function renderTopTab(): void {
+    content.innerHTML = '';
+    if (!topLoaded.length) {
+      content.innerHTML = '<div style="padding:40px;color:var(--text2);text-align:center">در حال بارگذاری...</div>';
+      return;
+    }
+    const h = el('h2', { style: 'font-size:20px;font-weight:800;margin-bottom:16px' }, 'برترین آهنگ‌ها');
+    const list = el('div', { class: 'track-list' });
+    topLoaded.slice(0, 20).forEach((t, i) => list.appendChild(renderTrackRow(t, i)));
+    content.appendChild(h);
+    content.appendChild(list);
+
+    let offset = 20;
+    const loadMoreBtn = renderLoadMoreBtn(async () => {
+      const more = topLoaded.slice(offset, offset + 20);
+      offset += 20;
+      more.forEach((t, i) => list.appendChild(renderTrackRow(t, offset - 20 + i)));
+      if (offset >= topLoaded.length) loadMoreBtn.remove();
+    });
+    content.appendChild(loadMoreBtn);
+  }
+
   function renderTab(key: string): void {
     content.innerHTML = '';
     if (key === 'top') {
-      if (!topLoaded.length) {
-        content.innerHTML = '<div style="padding:40px;color:var(--text2);text-align:center">در حال بارگذاری...</div>';
-      } else {
-        const h = el('h2', { style: 'font-size:20px;font-weight:800;margin-bottom:16px' }, 'برترین آهنگ‌ها');
-        const list = el('div', { class: 'track-list' });
-        topLoaded.forEach((t, i) => list.appendChild(renderTrackRow(t, i)));
-        content.appendChild(h);
-        content.appendChild(list);
-      }
+      renderTopTab();
     } else if (key === 'new') {
       if (!newLoaded.length) {
         content.innerHTML = '<div style="padding:40px;color:var(--text2);text-align:center">در حال بارگذاری...</div>';
@@ -415,7 +675,7 @@ async function renderBrowseView(): Promise<HTMLElement> {
         content.appendChild(h);
         content.appendChild(grid);
       }
-    } else {
+    } else if (key === 'videos') {
       if (!vidLoaded.length) {
         content.innerHTML = '<div style="padding:40px;color:var(--text2);text-align:center">در حال بارگذاری...</div>';
       } else {
@@ -425,12 +685,33 @@ async function renderBrowseView(): Promise<HTMLElement> {
         content.appendChild(h);
         content.appendChild(grid);
       }
+    } else if (key === 'genres') {
+      const genreList = [
+        { label: 'پاپ', query: 'pop music' },
+        { label: 'راک', query: 'rock music' },
+        { label: 'هیپ‌هاپ', query: 'hip hop' },
+        { label: 'R&B', query: 'rnb music' },
+        { label: 'الکترونیک', query: 'electronic music' },
+        { label: 'کیپاپ', query: 'kpop' },
+        { label: 'کلاسیک', query: 'classical music' },
+      ];
+      const h = el('h2', { style: 'font-size:20px;font-weight:800;margin-bottom:16px' }, 'ژانرها');
+      content.appendChild(h);
+      const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px' });
+      genreList.forEach(g => {
+        const card = el('div', { class: 'genre-card' }, g.label);
+        card.addEventListener('click', () => {
+          store.navigateTo({ view: 'genre', context: { genre: g.label } });
+        });
+        grid.appendChild(card);
+      });
+      content.appendChild(grid);
     }
   }
 
   const btnEls: HTMLButtonElement[] = [];
   tabDefs.forEach(({ label, key }) => {
-    const btn = el('button', { class: `browse-tab${key === activeKey ? ' active' : ''}` }, label);
+    const btn = el('button', { class: `browse-tab${key === activeKey ? ' active' : ''}` }, label) as HTMLButtonElement;
     btn.addEventListener('click', () => {
       activeKey = key;
       btnEls.forEach((b, i) => b.classList.toggle('active', tabDefs[i].key === key));
@@ -559,7 +840,7 @@ function renderSidebar(): HTMLElement {
 
   const itemEls: HTMLElement[] = [];
   navDefs.forEach(({ view, label, ico: i }) => {
-    const item = el('div', { class: `nav-item${store.getState().currentView === view ? ' active' : ''}` });
+    const item = el('div', { class: `nav-item${store.currentView === view ? ' active' : ''}` });
     const iconSpan = el('span', { class: 'nav-item__icon' });
     iconSpan.innerHTML = i;
     item.appendChild(iconSpan);
@@ -570,7 +851,11 @@ function renderSidebar(): HTMLElement {
   });
 
   store.on<View>('view', v => {
-    itemEls.forEach((item, i) => item.classList.toggle('active', navDefs[i].view === v));
+    // Highlight the base view: artist/genre/persian highlight their parent tabs
+    const activeView = (['home', 'browse', 'search', 'library'] as View[]).includes(v)
+      ? v
+      : v === 'artist' || v === 'genre' || v === 'persian' ? 'home' : v;
+    itemEls.forEach((item, i) => item.classList.toggle('active', navDefs[i].view === activeView));
   });
 
   sidebar.appendChild(nav);
@@ -930,18 +1215,23 @@ export function initApp(root: HTMLElement): void {
 
   let viewEl: HTMLElement | null = null;
 
-  async function loadView(view: View): Promise<void> {
+  async function loadView(entry: NavEntry): Promise<void> {
     if (viewEl) viewEl.remove();
     main.innerHTML = '';
+    const { view, context } = entry;
     let v: HTMLElement;
     if (view === 'home') v = await renderHomeView();
     else if (view === 'browse') v = await renderBrowseView();
     else if (view === 'search') v = renderSearchView();
-    else v = renderLibraryView();
+    else if (view === 'library') v = renderLibraryView();
+    else if (view === 'artist') v = await renderArtistView(context?.artistName || '');
+    else if (view === 'genre') v = await renderGenreView(context?.genre);
+    else v = await renderHomeView();
     main.appendChild(v);
     viewEl = v;
+    main.scrollTop = 0;
   }
 
-  store.on<View>('view', v => loadView(v));
-  loadView(store.getState().currentView);
+  store.on<NavEntry>('nav', entry => loadView(entry));
+  loadView(store.getCurrentNavEntry() || { view: 'home' });
 }

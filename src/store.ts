@@ -1,4 +1,4 @@
-import type { AppState, Track, Theme, View, PlayerState } from './types';
+import type { AppState, Track, Theme, View, PlayerState, NavEntry } from './types';
 
 type Listener<T> = (value: T) => void;
 
@@ -35,6 +35,7 @@ function loadTheme(): Theme {
 
 const initialState: AppState = {
   currentView: 'home',
+  navStack: [{ view: 'home' }],
   player: {
     currentTrack: null, queue: [], queueIndex: -1, isPlaying: false,
     volume: 70, progress: 0, currentTime: 0, duration: 0,
@@ -47,12 +48,44 @@ const initialState: AppState = {
 };
 
 class Store extends EventEmitter {
-  private state: AppState = { ...initialState };
+  private state: AppState = { ...initialState, navStack: [{ view: 'home' }] };
 
   getState(): Readonly<AppState> { return this.state; }
 
+  get currentView(): View {
+    const stack = this.state.navStack;
+    return stack[stack.length - 1]?.view || 'home';
+  }
+
+  navigateTo(entry: NavEntry): void {
+    this.state.navStack = [...this.state.navStack, entry];
+    this.state.currentView = entry.view;
+    this.emit('nav', entry);
+    this.emit('view', entry.view);
+  }
+
+  goBack(): void {
+    if (this.state.navStack.length <= 1) return;
+    this.state.navStack = this.state.navStack.slice(0, -1);
+    const entry = this.state.navStack[this.state.navStack.length - 1];
+    this.state.currentView = entry.view;
+    this.emit('nav', entry);
+    this.emit('view', entry.view);
+  }
+
+  canGoBack(): boolean {
+    return this.state.navStack.length > 1;
+  }
+
+  getCurrentNavEntry(): NavEntry | undefined {
+    const stack = this.state.navStack;
+    return stack[stack.length - 1];
+  }
+
   setView(view: View): void {
+    this.state.navStack = [{ view }];
     this.state.currentView = view;
+    this.emit('nav', { view });
     this.emit('view', view);
   }
 

@@ -1,60 +1,21 @@
-export type Source = 'itunes' | 'jamendo' | 'jiosaavn' | 'musicapi' | 'audiomack' | 'musicbrainz' | 'nex1music' | 'hivefy' | 'majidapi' | 'deezer' | 'soundcloud' | 'spotify' | 'audius' | 'biamusic' | 'sevilmusic';
-
-export interface MediaLink {
-  quality: string; // '320', '128', '1080p', '720p', '480p', 'default'
-  url: string;
-  type: 'audio' | 'video';
-}
+export type Source = 'itunes' | 'apple';
+export type Theme = 'dark' | 'light';
+export type View = 'home' | 'browse' | 'search' | 'library';
+export type RepeatMode = 'none' | 'one' | 'all';
 
 export interface Track {
   id: string;
   title: string;
   artist: string;
   album: string;
-  duration: number; // seconds
+  duration: number;
   imageUrl: string;
   audioUrl: string;
   source: Source;
   genre?: string;
   year?: number;
-  mediaLinks?: MediaLink[]; // multiple quality options from crawler
-  videoUrl?: string;        // primary video URL if available
-}
-
-export interface SearchState {
-  query: string;
-  results: Track[];
-  loading: boolean;
-  error: string | null;
-  page: number;
-}
-
-export type RepeatMode = 'none' | 'one' | 'all';
-
-export interface PlayerState {
-  currentTrack: Track | null;
-  queue: Track[];
-  queueIndex: number;
-  isPlaying: boolean;
-  volume: number; // 0-100
-  progress: number; // 0-100
-  currentTime: number;
-  duration: number;
-  isShuffle: boolean;
-  repeatMode: RepeatMode;
-}
-
-export interface Settings {
-  jamendoClientId: string;
-  jiosaavnUrl: string;
-  audiomackKey: string;
-  audiomackSecret: string;
-  soundcloudClientId: string;
-  spotifyClientId: string;
-  spotifyClientSecret: string;
-  persianProxyUrl: string; // optional Cloudflare Worker URL for BiaMusic/SevilMusic
-  crawlerApiUrl: string;  // deployed crawler server URL (Railway/Render)
-  enabledSources: Record<Source, boolean>;
+  videoUrl?: string;
+  appleId?: string;
 }
 
 export interface Album {
@@ -64,24 +25,27 @@ export interface Album {
   imageUrl: string;
   genre?: string;
   year?: number;
+  appleId?: string;
 }
 
-export interface Podcast {
-  id: string;
-  name: string;
-  publisher: string;
-  description: string;
-  totalEpisodes: number;
-  spotifyUrl: string;
+export interface PlayerState {
+  currentTrack: Track | null;
+  queue: Track[];
+  queueIndex: number;
+  isPlaying: boolean;
+  volume: number;
+  progress: number;
+  currentTime: number;
+  duration: number;
+  isShuffle: boolean;
+  repeatMode: RepeatMode;
 }
-
-export type View = 'home' | 'search' | 'favorites';
 
 export interface AppState {
   currentView: View;
-  search: SearchState;
   player: PlayerState;
   favorites: Track[];
-  settings: Settings;
-  showSettings: boolean;
+  theme: Theme;
+  isPlayerExpanded: boolean;
+  search: { query: string; results: Track[]; loading: boolean; error: string | null };
 }

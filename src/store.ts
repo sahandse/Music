@@ -1,4 +1,4 @@
-import type { AppState, Track, Settings, View, PlayerState } from './types'
+import type { AppState, Track, Theme, View, PlayerState } from './types';
 
 type Listener<T> = (value: T) => void;
 
@@ -20,112 +20,52 @@ class EventEmitter {
   }
 }
 
-const SETTINGS_KEY = 'music_app_settings';
-const FAVORITES_KEY = 'music_app_favorites';
-
-function loadSettings(): Settings {
-  const defaults: Settings = {
-    jamendoClientId: '826afc6b',
-    jiosaavnUrl: 'https://saavn.sumit.co',
-    audiomackKey: '',
-    audiomackSecret: '',
-    soundcloudClientId: '',
-    spotifyClientId: '',
-    spotifyClientSecret: '',
-    persianProxyUrl: '',
-    crawlerApiUrl: '',
-    enabledSources: {
-      itunes: true,
-      jamendo: true,
-      jiosaavn: true,
-      musicapi: true,
-      musicbrainz: true,
-      audiomack: false,
-      nex1music: true,
-      hivefy: true,
-      majidapi: true,
-      deezer: true,
-      soundcloud: false,
-      spotify: false,
-      audius: true,
-      biamusic: true,
-      sevilmusic: true,
-    },
-  };
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<Settings>;
-      return {
-        ...defaults,
-        ...parsed,
-        enabledSources: { ...defaults.enabledSources, ...parsed.enabledSources },
-      };
-    }
-  } catch {}
-  return defaults;
-}
+const FAVORITES_KEY = 'am_favorites';
+const THEME_KEY = 'am_theme';
 
 function loadFavorites(): Track[] {
-  try {
-    const raw = localStorage.getItem(FAVORITES_KEY);
-    if (raw) return JSON.parse(raw) as Track[];
-  } catch {}
-  return [];
+  try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]') as Track[]; }
+  catch { return []; }
+}
+
+function loadTheme(): Theme {
+  const saved = localStorage.getItem(THEME_KEY);
+  return saved === 'light' ? 'light' : 'dark';
 }
 
 const initialState: AppState = {
   currentView: 'home',
-  search: {
-    query: '',
-    results: [],
-    loading: false,
-    error: null,
-    page: 1,
-  },
   player: {
-    currentTrack: null,
-    queue: [],
-    queueIndex: -1,
-    isPlaying: false,
-    volume: 70,
-    progress: 0,
-    currentTime: 0,
-    duration: 0,
-    isShuffle: false,
-    repeatMode: 'none',
+    currentTrack: null, queue: [], queueIndex: -1, isPlaying: false,
+    volume: 70, progress: 0, currentTime: 0, duration: 0,
+    isShuffle: false, repeatMode: 'none',
   },
   favorites: loadFavorites(),
-  settings: loadSettings(),
-  showSettings: false,
+  theme: loadTheme(),
+  isPlayerExpanded: false,
+  search: { query: '', results: [], loading: false, error: null },
 };
 
 class Store extends EventEmitter {
-  private state: AppState = initialState;
+  private state: AppState = { ...initialState };
 
-  getState(): Readonly<AppState> {
-    return this.state;
-  }
+  getState(): Readonly<AppState> { return this.state; }
 
   setView(view: View): void {
     this.state.currentView = view;
     this.emit('view', view);
   }
 
-  setSearchLoading(loading: boolean): void {
-    this.state.search.loading = loading;
-    this.emit('search', this.state.search);
+  setTheme(theme: Theme): void {
+    this.state.theme = theme;
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
+    this.emit('theme', theme);
   }
 
-  setSearchResults(query: string, results: Track[]): void {
-    this.state.search = { ...this.state.search, query, results, loading: false, error: null };
-    this.emit('search', this.state.search);
-  }
-
-  setSearchError(error: string): void {
-    this.state.search.loading = false;
-    this.state.search.error = error;
-    this.emit('search', this.state.search);
+  setPlayerExpanded(v: boolean): void {
+    this.state.isPlayerExpanded = v;
+    this.emit('expanded', v);
   }
 
   updatePlayer(partial: Partial<PlayerState>): void {
@@ -133,30 +73,21 @@ class Store extends EventEmitter {
     this.emit('player', this.state.player);
   }
 
+  setSearchResults(query: string, results: Track[]): void {
+    this.state.search = { query, results, loading: false, error: null };
+    this.emit('search', this.state.search);
+  }
+
   toggleFavorite(track: Track): void {
     const idx = this.state.favorites.findIndex(f => f.id === track.id);
-    if (idx > -1) {
-      this.state.favorites.splice(idx, 1);
-    } else {
-      this.state.favorites.push(track);
-    }
+    if (idx > -1) this.state.favorites.splice(idx, 1);
+    else this.state.favorites.push(track);
     localStorage.setItem(FAVORITES_KEY, JSON.stringify(this.state.favorites));
     this.emit('favorites', this.state.favorites);
   }
 
   isFavorite(id: string): boolean {
     return this.state.favorites.some(f => f.id === id);
-  }
-
-  saveSettings(settings: Settings): void {
-    this.state.settings = settings;
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    this.emit('settings', settings);
-  }
-
-  setShowSettings(show: boolean): void {
-    this.state.showSettings = show;
-    this.emit('showSettings', show);
   }
 }
 

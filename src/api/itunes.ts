@@ -1,40 +1,79 @@
-import type { Track } from '../types'
+import type { Track } from '../types';
 
-interface ITunesResult {
-  trackId: number;
-  trackName: string;
-  artistName: string;
-  collectionName: string;
-  artworkUrl100: string;
-  previewUrl: string;
-  trackTimeMillis: number;
-  primaryGenreName: string;
-  releaseDate: string;
+function artworkUrl(url: string): string {
+  return (url || '').replace('100x100bb', '600x600bb');
 }
 
-interface ITunesResponse {
-  resultCount: number;
-  results: ITunesResult[];
+interface ItunesResult {
+  trackId?: number;
+  artistId?: number;
+  collectionId?: number;
+  wrapperType?: string;
+  kind?: string;
+  trackName?: string;
+  artistName?: string;
+  collectionName?: string;
+  artworkUrl100?: string;
+  previewUrl?: string;
+  trackTimeMillis?: number;
+  primaryGenreName?: string;
+  releaseDate?: string;
 }
 
-export async function searchItunes(query: string): Promise<Track[]> {
-  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=20`;
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error('iTunes API error');
-  const data: ITunesResponse = await resp.json();
+function fromItunes(item: ItunesResult, isVideo = false): Track {
+  const id = item.trackId || item.artistId || item.collectionId || 0;
+  return {
+    id: `itunes_${isVideo ? 'mv' : 'song'}_${id}`,
+    title: item.trackName || item.artistName || item.collectionName || '',
+    artist: item.artistName || '',
+    album: item.collectionName || '',
+    duration: Math.round((item.trackTimeMillis || 0) / 1000),
+    imageUrl: artworkUrl(item.artworkUrl100 || ''),
+    audioUrl: item.previewUrl || '',
+    source: 'itunes' as const,
+    genre: item.primaryGenreName,
+    videoUrl: isVideo ? (item.previewUrl || '') : undefined,
+    appleId: String(id),
+  };
+}
 
-  return data.results
-    .filter(r => r.previewUrl)
-    .map(r => ({
-      id: `itunes_${r.trackId}`,
-      title: r.trackName,
-      artist: r.artistName,
-      album: r.collectionName || '',
-      duration: Math.round((r.trackTimeMillis || 0) / 1000),
-      imageUrl: r.artworkUrl100.replace('100x100', '300x300'),
-      audioUrl: r.previewUrl,
-      source: 'itunes' as const,
-      genre: r.primaryGenreName,
-      year: r.releaseDate ? new Date(r.releaseDate).getFullYear() : undefined,
-    }));
+async function itunesFetch(url: string): Promise<ItunesResult[]> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return [];
+    const json = await res.json() as { results?: ItunesResult[] };
+    return json.results || [];
+  } catch { return []; }
+}
+
+export async function searchItunes(query: string, limit = 25): Promise<Track[]> {
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=us&media=music&entity=musicTrack&limit=${limit}`;
+  const results = await itunesFetch(url);
+  return results.filter(i => i.previewUrl).map(i => fromItunes(i));
+}
+
+export async function searchMusicVideos(query: string, limit = 20): Promise<Track[]> {
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=us&media=musicVideo&entity=musicVideo&limit=${limit}`;
+  const results = await itunesFetch(url);
+  return results.filter(i => i.previewUrl).map(i => fromItunes(i, true));
+}
+
+export async function lookupByIds(ids: string[]): Promise<Map<string, Track>> {
+  const map = new Map<string, Track>();
+  if (!ids.length) return map;
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
+  for (const chunk of chunks) {
+    try {
+      const url = `https://itunes.apple.com/lookup?id=${chunk.join(',')}&country=us`;
+      const results = await itunesFetch(url);
+      for (const item of results) {
+        if (item.previewUrl) {
+          const t = fromItunes(item);
+          if (t.appleId) map.set(t.appleId, t);
+        }
+      }
+    } catch {}
+  }
+  return map;
 }

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: persian-music-crawler
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: SOURCE_DOMAINS
+        value: biamusic.ir,dl.biamusic.ir,sevilmusics.com,dl.sevilmusics.com
+      - key: ENABLE_MEDIA_PROXY
+        value: "false"
+      - key: REQUEST_DELAY_MS
+        value: "900"
+      - key: MAX_CRAWL_ITEMS
+        value: "30"

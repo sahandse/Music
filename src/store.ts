@@ -33,6 +33,7 @@ function loadSettings(): Settings {
     spotifyClientId: '',
     spotifyClientSecret: '',
     persianProxyUrl: '',
+    crawlerApiUrl: '',
     enabledSources: {
       itunes: true,
       jamendo: true,

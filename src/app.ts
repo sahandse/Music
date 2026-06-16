@@ -17,6 +17,7 @@ import { searchSpotify } from './api/spotify'
 import { searchAudius, getTrendingAudius } from './api/audius'
 import { searchBiaMusic, getRecentBiaMusicTracks, setBiaMusicProxy } from './api/biamusic'
 import { searchSevilMusic, getRecentSevilMusicTracks, setSevilMusicProxy } from './api/sevilmusic'
+import { crawlerCatalog, crawlerCrawl } from './api/crawler'
 import { getTopRecordings, getTopArtists } from './api/listenbrainz'
 import { getSyncedLyrics } from './api/lrclib'
 import type { LyricLine } from './api/lrclib'
@@ -383,7 +384,22 @@ function renderHomeView(): HTMLElement {
   }
   podcastSection.append(podcastHeader, podcastRow);
 
-  view.append(topSongsSection, artistsSection, topAlbumsSection, iranianSection, biamusicSection, sevilSection, trendingSection, podcastSection);
+  const { settings: s } = store.getState();
+
+  // Crawler: Music Video section (shown only when crawlerApiUrl is set)
+  const { section: videoSection, row: videoRow } = renderSection('موزیک ویدیو ایرانی', () => {
+    store.setSearchLoading(true);
+    store.setView('search');
+    const { crawlerApiUrl } = store.getState().settings;
+    if (crawlerApiUrl) {
+      crawlerCatalog(crawlerApiUrl, { type: 'video' })
+        .then(r => store.setSearchResults('موزیک ویدیو', r))
+        .catch(() => store.setSearchError('خطا'));
+    }
+  });
+  if (!s.crawlerApiUrl) videoSection.style.display = 'none';
+
+  view.append(topSongsSection, artistsSection, topAlbumsSection, iranianSection, biamusicSection, sevilSection, videoSection, trendingSection, podcastSection);
   view.appendChild(renderGenresSection());
 
   // Load chart data (iTunes charts for songs/albums/quick-grid)
@@ -440,7 +456,6 @@ function renderHomeView(): HTMLElement {
     });
 
   // BiaMusic recent tracks
-  const { settings: s } = store.getState();
   if (s.enabledSources.biamusic) {
     getRecentBiaMusicTracks(10)
       .then(tracks => {
@@ -462,6 +477,16 @@ function renderHomeView(): HTMLElement {
       .catch(() => { sevilRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`; });
   } else {
     sevilSection.style.display = 'none';
+  }
+
+  // Crawler catalog: music videos (only when crawlerApiUrl configured)
+  if (s.crawlerApiUrl) {
+    crawlerCatalog(s.crawlerApiUrl, { type: 'video' })
+      .then(tracks => {
+        if (tracks.length) fillTrackRow(videoRow, tracks);
+        else videoSection.style.display = 'none';
+      })
+      .catch(() => { videoSection.style.display = 'none'; });
   }
 
   // Trending: ListenBrainz top recordings enriched with JioSaavn audio, fallback to Audius
@@ -527,6 +552,60 @@ function iconVolume(level: number): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
 }
 
+function openVideoOverlay(
+  title: string,
+  artist: string,
+  videoUrl: string,
+  videoLinks: Array<{ quality: string; url: string; type: string }>
+): void {
+  const existing = document.getElementById('video-overlay');
+  if (existing) existing.remove();
+
+  const overlay = el('div', { class: 'video-overlay', id: 'video-overlay' });
+  const modal = el('div', { class: 'video-modal' });
+
+  const header = el('div', { class: 'video-modal__header' });
+  const info = el('div', { class: 'video-modal__info' });
+  info.append(el('p', { class: 'video-modal__title' }, title), el('p', { class: 'video-modal__artist' }, artist));
+  const closeBtn = el('button', { class: 'video-modal__close', 'aria-label': 'بستن' });
+  closeBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+  header.append(info, closeBtn);
+
+  const videoEl = el('video', { class: 'video-modal__video', src: videoUrl }) as HTMLVideoElement;
+  videoEl.controls = true;
+  videoEl.autoplay = true;
+
+  const footer = el('div', { class: 'video-modal__footer' });
+  if (videoLinks.length > 1) {
+    const qualLabel = el('span', {}, 'کیفیت: ');
+    footer.appendChild(qualLabel);
+    videoLinks.forEach(link => {
+      const btn = el('button', { class: 'pb-quality-btn' }, link.quality.toUpperCase());
+      if (link.url === videoUrl) btn.classList.add('pb-quality-btn--active');
+      btn.addEventListener('click', () => {
+        const t = videoEl.currentTime;
+        videoEl.src = link.url;
+        videoEl.currentTime = t;
+        videoEl.play().catch(() => {});
+        footer.querySelectorAll('.pb-quality-btn').forEach(b => b.classList.remove('pb-quality-btn--active'));
+        btn.classList.add('pb-quality-btn--active');
+      });
+      footer.appendChild(btn);
+    });
+  }
+
+  modal.append(header, videoEl, footer);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  const close = () => { videoEl.pause(); overlay.remove(); };
+  closeBtn.addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', function onKey(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); }
+  });
+}
+
 function renderPlayerBar(): HTMLElement {
   const bar = el('div', { class: 'player-bar' });
 
@@ -579,10 +658,19 @@ function renderPlayerBar(): HTMLElement {
   const lyricsBtn = el('button', { class: 'pb-btn pb-btn--sm pb-lyrics-btn', 'aria-label': 'ترانه' });
   lyricsBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
 
+  // Quality selector (hidden until track has mediaLinks)
+  const qualityWrap = el('div', { class: 'pb-quality-wrap' });
+  qualityWrap.style.display = 'none';
+
+  // Video button (hidden until track has videoUrl)
+  const videoBtn = el('button', { class: 'pb-btn pb-btn--sm pb-video-btn', 'aria-label': 'موزیک ویدیو' });
+  videoBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/><rect x="2" y="3" width="20" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
+  videoBtn.style.display = 'none';
+
   const volBtn = el('button', { class: 'pb-btn pb-btn--sm', 'aria-label': 'صدا' });
   volBtn.innerHTML = iconVolume(currentVolume);
   const volumeBar = el('input', { class: 'pb-volume', type: 'range', min: '0', max: '100', value: '70' });
-  right.append(lyricsBtn, volBtn, volumeBar);
+  right.append(lyricsBtn, qualityWrap, videoBtn, volBtn, volumeBar);
 
   bar.append(trackInfo, center, right);
 
@@ -644,6 +732,15 @@ function renderPlayerBar(): HTMLElement {
     if (lyricsPanel) { lyricsPanel.remove(); lyricsPanel = null; }
     lyricsBtn.classList.remove('pb-btn--active');
   }
+
+  videoBtn.addEventListener('click', () => {
+    const { currentTrack } = store.getState().player;
+    if (!currentTrack) return;
+    const videoLinks = (currentTrack.mediaLinks || []).filter(l => l.type === 'video');
+    const videoUrl = currentTrack.videoUrl || videoLinks[0]?.url;
+    if (!videoUrl) return;
+    openVideoOverlay(currentTrack.title, currentTrack.artist, videoUrl, videoLinks);
+  });
 
   lyricsBtn.addEventListener('click', () => {
     if (lyricsPanel) { closeLyricsPanel(); return; }
@@ -721,6 +818,29 @@ function renderPlayerBar(): HTMLElement {
       const fav = store.isFavorite(currentTrack.id);
       heartBtn.classList.toggle('pb-heart--active', fav);
       heartBtn.innerHTML = heartSvg(fav);
+
+      // Quality selector
+      const audioLinks = (currentTrack.mediaLinks || []).filter(l => l.type === 'audio');
+      if (audioLinks.length > 1) {
+        qualityWrap.style.display = 'flex';
+        qualityWrap.innerHTML = '';
+        audioLinks.forEach(link => {
+          const btn = el('button', { class: 'pb-quality-btn' }, link.quality.toUpperCase());
+          if (link.quality === player.currentQuality) btn.classList.add('pb-quality-btn--active');
+          btn.addEventListener('click', () => {
+            player.switchQuality(link.url, link.quality);
+            qualityWrap.querySelectorAll('.pb-quality-btn').forEach(b => b.classList.remove('pb-quality-btn--active'));
+            btn.classList.add('pb-quality-btn--active');
+          });
+          qualityWrap.appendChild(btn);
+        });
+      } else {
+        qualityWrap.style.display = 'none';
+      }
+
+      // Video button
+      const hasVideo = !!(currentTrack.videoUrl || (currentTrack.mediaLinks || []).some(l => l.type === 'video'));
+      videoBtn.style.display = hasVideo ? 'flex' : 'none';
     }
 
     playBtn.innerHTML = isPlaying ? iconPause() : iconPlay();
@@ -985,8 +1105,13 @@ function renderSettings(): HTMLElement {
       </div>
     </div>
     <div class="settings-section">
-      <h3 class="settings-section__title">پروکسی فارسی (اختیاری)</h3>
-      <p class="settings-section__desc">آدرس Cloudflare Worker برای بارگذاری بهتر بیاموزیک و سویل موزیک. فایل <code>workers/persian-proxy.js</code> را deploy کنید.</p>
+      <h3 class="settings-section__title">سرور Crawler ایرانی (اختیاری)</h3>
+      <p class="settings-section__desc">آدرس سرور crawler که از پوشه <code>server/</code> روی Railway یا Render deploy می‌شود. برای کیفیت 320/128 و موزیک ویدیو لازم است.</p>
+      <input class="settings-input" id="crawler-api-url" type="url" placeholder="https://persian-music-crawler.railway.app" value="${settings.crawlerApiUrl || ''}"/>
+    </div>
+    <div class="settings-section">
+      <h3 class="settings-section__title">پروکسی Cloudflare (اختیاری)</h3>
+      <p class="settings-section__desc">جایگزین سبک‌تر بدون deploy کامل. فایل <code>workers/persian-proxy.js</code> را deploy کنید.</p>
       <input class="settings-input" id="persian-proxy-url" type="url" placeholder="https://persian-music-proxy.your-subdomain.workers.dev" value="${settings.persianProxyUrl || ''}"/>
     </div>
     <div class="settings-footer">
@@ -1006,6 +1131,7 @@ function renderSettings(): HTMLElement {
       soundcloudClientId: cur.soundcloudClientId,
       spotifyClientId: cur.spotifyClientId,
       spotifyClientSecret: cur.spotifyClientSecret,
+      crawlerApiUrl: (modal.querySelector('#crawler-api-url') as HTMLInputElement).value.trim(),
       persianProxyUrl: (modal.querySelector('#persian-proxy-url') as HTMLInputElement).value.trim(),
       enabledSources: {
         itunes: (modal.querySelector('#src-itunes') as HTMLInputElement).checked,
@@ -1041,9 +1167,10 @@ export function initApp(root: HTMLElement): void {
   }
   // Re-apply when settings change
   store.on('settings', (s: unknown) => {
-    const { persianProxyUrl: p } = s as { persianProxyUrl: string };
+    const { persianProxyUrl: p, crawlerApiUrl: c } = s as { persianProxyUrl: string; crawlerApiUrl: string };
     setBiaMusicProxy(p || '');
     setSevilMusicProxy(p || '');
+    void c; // crawlerApiUrl is read directly from store in each call
   });
 
   const appEl = el('div', { class: 'app' });

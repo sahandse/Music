@@ -1,5 +1,11 @@
 export type Source = 'itunes' | 'jamendo' | 'jiosaavn' | 'musicapi' | 'audiomack' | 'musicbrainz' | 'nex1music' | 'hivefy' | 'majidapi' | 'deezer' | 'soundcloud' | 'spotify' | 'audius' | 'biamusic' | 'sevilmusic';
 
+export interface MediaLink {
+  quality: string; // '320', '128', '1080p', '720p', '480p', 'default'
+  url: string;
+  type: 'audio' | 'video';
+}
+
 export interface Track {
   id: string;
   title: string;
@@ -11,6 +17,8 @@ export interface Track {
   source: Source;
   genre?: string;
   year?: number;
+  mediaLinks?: MediaLink[]; // multiple quality options from crawler
+  videoUrl?: string;        // primary video URL if available
 }
 
 export interface SearchState {
@@ -45,6 +53,7 @@ export interface Settings {
   spotifyClientId: string;
   spotifyClientSecret: string;
   persianProxyUrl: string; // optional Cloudflare Worker URL for BiaMusic/SevilMusic
+  crawlerApiUrl: string;  // deployed crawler server URL (Railway/Render)
   enabledSources: Record<Source, boolean>;
 }
 

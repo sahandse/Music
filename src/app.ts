@@ -688,6 +688,9 @@ async function renderGenreView(initialGenre?: string): Promise<HTMLElement> {
     { label: 'الکترونیک', query: 'electronic music' },
     { label: 'کیپاپ',     query: 'kpop' },
     { label: 'کلاسیک',    query: 'classical music' },
+    { label: 'ایرانی',    query: 'persian pop iranian music' },
+    { label: 'ایندی',     query: 'indie music alternative' },
+    { label: 'جاز',       query: 'jazz music' },
   ];
 
   const tabs = el('div', { class: 'browse-tabs' });
@@ -845,17 +848,17 @@ async function renderHomeView(): Promise<HTMLElement> {
   const heroEl = renderHero();
   view.appendChild(heroEl);
 
-  const hotSec   = renderSection('داغ‌ترین آهنگ‌ها',        'track', () => store.setView('browse'));
-  const newSec   = renderSection('جدیدترین آلبوم‌ها',       'album');
-  const vidSec   = renderSection('برترین موزیک ویدیوها',    'video', () => store.setView('browse'));
-  const persianSec2 = renderSection('موزیک ایرانی 🇮🇷',      'track');
-  const popSec   = renderSection('پاپ برتر',                'track');
-  const rockSec  = renderSection('راک',                     'track');
-  const hipSec   = renderSection('هیپ‌هاپ',                 'track');
-  const rnbSec   = renderSection('R&B',                     'track');
-  const classicSec = renderSection('کلاسیک‌های موسیقی',     'track');
-  const elecSec  = renderSection('موزیک الکترونیک',         'track');
-  const worldSec = renderSection('جدیدترین‌های جهانی',      'track');
+  const hotSec     = renderSection('داغ‌ترین آهنگ‌ها',      'track', () => store.navigateTo({ view: 'genre', context: { genre: 'پاپ' } }));
+  const newSec     = renderSection('جدیدترین آلبوم‌ها',     'album', () => store.setView('browse'));
+  const vidSec     = renderSection('برترین موزیک ویدیوها',  'video', () => store.setView('browse'));
+  const persianSec2 = renderSection('موزیک ایرانی 🇮🇷',     'track', () => store.navigateTo({ view: 'genre', context: { genre: 'ایرانی' } }));
+  const popSec     = renderSection('پاپ برتر',              'track', () => store.navigateTo({ view: 'genre', context: { genre: 'پاپ' } }));
+  const rockSec    = renderSection('راک',                   'track', () => store.navigateTo({ view: 'genre', context: { genre: 'راک' } }));
+  const hipSec     = renderSection('هیپ‌هاپ',               'track', () => store.navigateTo({ view: 'genre', context: { genre: 'هیپ‌هاپ' } }));
+  const rnbSec     = renderSection('R&B',                   'track', () => store.navigateTo({ view: 'genre', context: { genre: 'R&B' } }));
+  const classicSec = renderSection('کلاسیک‌های موسیقی',     'track', () => store.navigateTo({ view: 'genre', context: { genre: 'کلاسیک' } }));
+  const elecSec    = renderSection('موزیک الکترونیک',       'track', () => store.navigateTo({ view: 'genre', context: { genre: 'الکترونیک' } }));
+  const worldSec   = renderSection('جدیدترین‌های جهانی',    'track', () => store.navigateTo({ view: 'genre', context: { genre: 'ایندی' } }));
 
   view.appendChild(hotSec.el);
   view.appendChild(newSec.el);
@@ -1073,6 +1076,9 @@ async function renderBrowseView(): Promise<HTMLElement> {
         { label: 'الکترونیک', query: 'electronic music' },
         { label: 'کیپاپ', query: 'kpop' },
         { label: 'کلاسیک', query: 'classical music' },
+        { label: 'ایرانی', query: 'persian pop iranian music' },
+        { label: 'ایندی', query: 'indie music alternative' },
+        { label: 'جاز', query: 'jazz music' },
       ];
       const h = el('h2', { style: 'font-size:20px;font-weight:800;margin-bottom:16px' }, 'ژانرها');
       content.appendChild(h);

@@ -1,6 +1,6 @@
 export type Source = 'itunes' | 'apple';
 export type Theme = 'dark' | 'light';
-export type View = 'home' | 'browse' | 'search' | 'library' | 'artist' | 'genre' | 'persian';
+export type View = 'home' | 'browse' | 'search' | 'library' | 'artist' | 'genre' | 'persian' | 'album' | 'playlists';
 export type RepeatMode = 'none' | 'one' | 'all';
 
 export interface Track {
@@ -28,6 +28,13 @@ export interface Album {
   appleId?: string;
 }
 
+export interface Playlist {
+  id: string;
+  name: string;
+  tracks: Track[];
+  createdAt: number;
+}
+
 export interface PlayerState {
   currentTrack: Track | null;
   queue: Track[];
@@ -43,7 +50,7 @@ export interface PlayerState {
 
 export interface NavEntry {
   view: View;
-  context?: { artistName?: string; artistId?: string; genre?: string };
+  context?: { artistName?: string; artistId?: string; genre?: string; albumId?: string; albumTitle?: string; albumArtist?: string };
 }
 
 export interface AppState {
@@ -51,6 +58,7 @@ export interface AppState {
   navStack: NavEntry[];
   player: PlayerState;
   favorites: Track[];
+  playlists: Playlist[];
   theme: Theme;
   isPlayerExpanded: boolean;
   search: { query: string; results: Track[]; loading: boolean; error: string | null };

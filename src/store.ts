@@ -1,4 +1,4 @@
-import type { AppState, Track, Theme, View, PlayerState, NavEntry } from './types';
+import type { AppState, Track, Theme, View, PlayerState, NavEntry, Playlist } from './types';
 
 type Listener<T> = (value: T) => void;
 
@@ -22,6 +22,7 @@ class EventEmitter {
 
 const FAVORITES_KEY = 'am_favorites';
 const THEME_KEY = 'am_theme';
+const PLAYLISTS_KEY = 'am_playlists';
 
 function loadFavorites(): Track[] {
   try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]') as Track[]; }
@@ -33,6 +34,11 @@ function loadTheme(): Theme {
   return saved === 'light' ? 'light' : 'dark';
 }
 
+function loadPlaylists(): Playlist[] {
+  try { return JSON.parse(localStorage.getItem(PLAYLISTS_KEY) || '[]') as Playlist[]; }
+  catch { return []; }
+}
+
 const initialState: AppState = {
   currentView: 'home',
   navStack: [{ view: 'home' }],
@@ -42,6 +48,7 @@ const initialState: AppState = {
     isShuffle: false, repeatMode: 'none',
   },
   favorites: loadFavorites(),
+  playlists: loadPlaylists(),
   theme: loadTheme(),
   isPlayerExpanded: false,
   search: { query: '', results: [], loading: false, error: null },
@@ -121,6 +128,43 @@ class Store extends EventEmitter {
 
   isFavorite(id: string): boolean {
     return this.state.favorites.some(f => f.id === id);
+  }
+
+  createPlaylist(name: string): void {
+    const playlist: Playlist = {
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+      name,
+      tracks: [],
+      createdAt: Date.now(),
+    };
+    this.state.playlists = [...this.state.playlists, playlist];
+    localStorage.setItem(PLAYLISTS_KEY, JSON.stringify(this.state.playlists));
+    this.emit('playlists', this.state.playlists);
+  }
+
+  addToPlaylist(playlistId: string, track: Track): void {
+    this.state.playlists = this.state.playlists.map(pl => {
+      if (pl.id !== playlistId) return pl;
+      if (pl.tracks.some(t => t.id === track.id)) return pl;
+      return { ...pl, tracks: [...pl.tracks, track] };
+    });
+    localStorage.setItem(PLAYLISTS_KEY, JSON.stringify(this.state.playlists));
+    this.emit('playlists', this.state.playlists);
+  }
+
+  removeFromPlaylist(playlistId: string, trackId: string): void {
+    this.state.playlists = this.state.playlists.map(pl => {
+      if (pl.id !== playlistId) return pl;
+      return { ...pl, tracks: pl.tracks.filter(t => t.id !== trackId) };
+    });
+    localStorage.setItem(PLAYLISTS_KEY, JSON.stringify(this.state.playlists));
+    this.emit('playlists', this.state.playlists);
+  }
+
+  deletePlaylist(playlistId: string): void {
+    this.state.playlists = this.state.playlists.filter(pl => pl.id !== playlistId);
+    localStorage.setItem(PLAYLISTS_KEY, JSON.stringify(this.state.playlists));
+    this.emit('playlists', this.state.playlists);
   }
 }
 

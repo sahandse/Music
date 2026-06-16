@@ -18,6 +18,7 @@ interface ItunesResult {
   trackTimeMillis?: number;
   primaryGenreName?: string;
   releaseDate?: string;
+  trackNumber?: number;
 }
 
 function fromItunes(item: ItunesResult, isVideo = false): Track {
@@ -79,6 +80,7 @@ export async function searchAlbums(query: string, limit = 25): Promise<Album[]> 
       artist: item.artistName || '',
       imageUrl: artworkUrl(item.artworkUrl100 || ''),
       genre: item.primaryGenreName,
+      year: item.releaseDate ? new Date(item.releaseDate).getFullYear() : undefined,
       appleId: String(item.collectionId),
     }));
 }
@@ -100,4 +102,15 @@ export async function lookupByIds(ids: string[]): Promise<Map<string, Track>> {
     }
   }));
   return map;
+}
+
+export async function getAlbumTracks(albumId: string): Promise<{ collection: ItunesResult | null; tracks: Track[] }> {
+  const url = `https://itunes.apple.com/lookup?id=${albumId}&entity=song&country=us`;
+  const results = await itunesFetch(url);
+  const collection = results.find(r => r.wrapperType === 'collection') || null;
+  const tracks = results
+    .filter(r => r.wrapperType === 'track')
+    .sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0))
+    .map(r => fromItunes(r));
+  return { collection, tracks };
 }

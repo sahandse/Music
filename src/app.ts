@@ -1,10 +1,16 @@
 import { store } from './store';
 import { player } from './player';
 import { getTopSongs, getNewAlbums, getTopVideos } from './api/apple-charts';
-import { searchItunes, searchMusicVideos, searchAlbums, lookupByIds } from './api/itunes';
+import { searchItunes, searchMusicVideos, searchAlbums, lookupByIds, getAlbumTracks } from './api/itunes';
 import { getSyncedLyrics } from './api/lrclib';
 import type { LyricLine } from './api/lrclib';
-import type { Track, Album, View, PlayerState, NavEntry } from './types';
+import type { Track, Album, View, PlayerState, NavEntry, Playlist } from './types';
+
+// ─── Module-level state ───────────────────────────────────────────────────
+
+let autoPlayQuery: string | null = null;
+let autoPlayOffset = 0;
+let radioQuery: string | null = null;
 
 // ─── Utilities ────────────────────────────────────────────────────────────
 
@@ -50,6 +56,10 @@ const ico = {
   compass: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>',
   library: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/></svg>',
+  list: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>',
+  radio: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-2 10H6V8h12v6z"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>',
   sun:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>',
   moon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>',
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
@@ -70,6 +80,109 @@ const ico = {
   videoPlay: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" opacity=".3"/><path d="M10 8.5l6 3.5-6 3.5v-7z"/></svg>',
 };
 
+// ─── Toast ────────────────────────────────────────────────────────────────
+
+function showToast(message: string): void {
+  const toast = el('div', { class: 'toast' }, message);
+  document.body.appendChild(toast);
+  setTimeout(() => toast.classList.add('visible'), 10);
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+}
+
+// ─── Create Playlist Modal ────────────────────────────────────────────────
+
+function openCreatePlaylistModal(initialTrack?: Track): void {
+  const overlay = el('div', { class: 'modal-overlay' });
+  const modal = el('div', { class: 'modal' });
+  modal.appendChild(el('h3', { class: 'modal__title' }, 'پلی‌لیست جدید'));
+  const input = el('input', { class: 'modal__input', type: 'text', placeholder: 'نام پلی‌لیست...', dir: 'rtl' }) as HTMLInputElement;
+  modal.appendChild(input);
+  const btnRow = el('div', { class: 'modal__btns' });
+  const cancelBtn = el('button', { class: 'modal__btn modal__btn--cancel' }, 'انصراف');
+  cancelBtn.addEventListener('click', () => overlay.remove());
+  const createBtn = el('button', { class: 'modal__btn modal__btn--create' }, 'ساختن');
+  createBtn.addEventListener('click', () => {
+    const name = input.value.trim();
+    if (!name) return;
+    store.createPlaylist(name);
+    if (initialTrack) {
+      const playlists = store.getState().playlists;
+      const newPl = playlists[playlists.length - 1];
+      store.addToPlaylist(newPl.id, initialTrack);
+    }
+    overlay.remove();
+    showToast('پلی‌لیست ساخته شد');
+  });
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(createBtn);
+  modal.appendChild(btnRow);
+  overlay.appendChild(modal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  input.focus();
+}
+
+// ─── Context Menu ─────────────────────────────────────────────────────────
+
+function openTrackContextMenu(track: Track, anchor: HTMLElement, _queue?: Track[]): void {
+  // Remove existing context menus
+  document.querySelectorAll('.context-menu').forEach(m => m.remove());
+
+  const menu = el('div', { class: 'context-menu' });
+
+  // Play next
+  const playNextItem = el('div', { class: 'context-menu__item' }, 'پخش بعدی');
+  playNextItem.addEventListener('click', () => {
+    const ps = store.getState().player;
+    const newQueue = [...ps.queue];
+    newQueue.splice(ps.queueIndex + 1, 0, track);
+    store.updatePlayer({ queue: newQueue });
+    menu.remove();
+    showToast('به صف پخش اضافه شد');
+  });
+  menu.appendChild(playNextItem);
+
+  // Add to playlist submenu
+  const playlists = store.getState().playlists;
+  if (playlists.length > 0) {
+    const sep = el('div', { class: 'context-menu__sep' });
+    menu.appendChild(sep);
+    const addToLabel = el('div', { class: 'context-menu__label' }, 'افزودن به پلی‌لیست:');
+    menu.appendChild(addToLabel);
+    playlists.forEach((pl: Playlist) => {
+      const item = el('div', { class: 'context-menu__item' }, pl.name);
+      item.addEventListener('click', () => {
+        store.addToPlaylist(pl.id, track);
+        menu.remove();
+        showToast(`به "${pl.name}" اضافه شد`);
+      });
+      menu.appendChild(item);
+    });
+  }
+
+  const newPlItem = el('div', { class: 'context-menu__item context-menu__item--accent' }, '+ پلی‌لیست جدید');
+  newPlItem.addEventListener('click', () => {
+    menu.remove();
+    openCreatePlaylistModal(track);
+  });
+  menu.appendChild(newPlItem);
+
+  // Position menu
+  const rect = anchor.getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.top = `${rect.bottom + 4}px`;
+  menu.style.left = `${rect.left}px`;
+  document.body.appendChild(menu);
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', () => menu.remove(), { once: true });
+  }, 0);
+}
+
 // ─── Back Button ───────────────────────────────────────────────────────────
 
 function renderBackButton(): HTMLElement {
@@ -84,7 +197,7 @@ function renderBackButton(): HTMLElement {
 
 // ─── Card Components ───────────────────────────────────────────────────────
 
-function renderTrackCard(track: Track): HTMLElement {
+function renderTrackCard(track: Track, autoQuery?: string): HTMLElement {
   const card = el('div', { class: 'track-card' });
   const artWrap = el('div', { class: 'track-card__art' });
   const img = el('img', { class: 'track-card__img', src: art(track.imageUrl, 300), alt: track.title, loading: 'lazy' });
@@ -103,7 +216,10 @@ function renderTrackCard(track: Track): HTMLElement {
   card.appendChild(artistEl);
 
   card.addEventListener('click', () => {
-    if (track.audioUrl) player.playTrack(track);
+    if (track.audioUrl) {
+      if (autoQuery) { autoPlayQuery = autoQuery; autoPlayOffset = 25; }
+      player.playTrack(track);
+    }
   });
   return card;
 }
@@ -143,10 +259,15 @@ function renderAlbumCard(album: Album): HTMLElement {
   card.appendChild(artWrap);
   card.appendChild(el('div', { class: 'album-card__title' }, album.title));
   card.appendChild(el('div', { class: 'album-card__artist' }, album.artist));
+  card.addEventListener('click', () => {
+    if (album.appleId) {
+      store.navigateTo({ view: 'album', context: { albumId: album.appleId, albumTitle: album.title, albumArtist: album.artist } });
+    }
+  });
   return card;
 }
 
-function renderTrackRow(track: Track, index: number): HTMLElement {
+function renderTrackRow(track: Track, index: number, queue?: Track[]): HTMLElement {
   const row = el('div', { class: 'track-row' });
   row.appendChild(el('div', { class: 'track-row__num' }, String(index + 1)));
   const artWrap = el('div', { class: 'track-row__art' });
@@ -165,6 +286,14 @@ function renderTrackRow(track: Track, index: number): HTMLElement {
   row.appendChild(info);
   if (track.duration) row.appendChild(el('div', { class: 'track-row__dur' }, fmt(track.duration)));
 
+  const moreBtn = el('button', { class: 'track-row__more' });
+  moreBtn.innerHTML = ico.more;
+  moreBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openTrackContextMenu(track, moreBtn, queue);
+  });
+  row.appendChild(moreBtn);
+
   const current = store.getState().player.currentTrack;
   if (current?.id === track.id) row.classList.add('playing');
 
@@ -174,6 +303,38 @@ function renderTrackRow(track: Track, index: number): HTMLElement {
 
   row.addEventListener('click', () => {
     if (track.audioUrl) player.playTrack(track);
+  });
+  return row;
+}
+
+function renderAlbumTrackRow(track: Track, index: number, albumTracks: Track[]): HTMLElement {
+  const row = el('div', { class: 'track-row' });
+  row.appendChild(el('div', { class: 'track-row__num' }, String(index + 1)));
+  const info = el('div', { class: 'track-row__info' });
+  info.appendChild(el('div', { class: 'track-row__title' }, track.title));
+  info.appendChild(el('div', { class: 'track-row__artist' }, track.artist));
+  row.appendChild(info);
+  if (track.duration) row.appendChild(el('div', { class: 'track-row__dur' }, fmt(track.duration)));
+
+  const moreBtn = el('button', { class: 'track-row__more' });
+  moreBtn.innerHTML = ico.more;
+  moreBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openTrackContextMenu(track, moreBtn);
+  });
+  row.appendChild(moreBtn);
+
+  const current = store.getState().player.currentTrack;
+  if (current?.id === track.id) row.classList.add('playing');
+  store.on<PlayerState>('player', ps => {
+    row.classList.toggle('playing', ps.currentTrack?.id === track.id);
+  });
+
+  row.addEventListener('click', () => {
+    if (track.audioUrl) {
+      store.updatePlayer({ queue: albumTracks, queueIndex: index });
+      player.playAtIndex(index);
+    }
   });
   return row;
 }
@@ -356,6 +517,64 @@ function renderLoadMoreBtn(onLoad: (btn: HTMLButtonElement) => Promise<void>): H
   return btn;
 }
 
+// ─── Radio ────────────────────────────────────────────────────────────────
+
+async function startRadio(query: string): Promise<void> {
+  radioQuery = query;
+  showToast(`رادیو: ${query}`);
+  const tracks = await searchItunes(query, 50);
+  if (!tracks.length) return;
+  const shuffled = [...tracks].sort(() => Math.random() - 0.5);
+  store.updatePlayer({ queue: shuffled, queueIndex: 0 });
+  player.playAtIndex(0);
+  autoPlayQuery = query;
+  autoPlayOffset = 50;
+}
+
+// ─── Album View ────────────────────────────────────────────────────────────
+
+async function renderAlbumView(albumId: string, albumTitle: string, albumArtist: string): Promise<HTMLElement> {
+  const view = el('div', { class: 'view' });
+  const wrap = el('div', { style: 'padding:20px' });
+  view.appendChild(wrap);
+
+  if (store.canGoBack()) wrap.appendChild(renderBackButton());
+
+  // Hero
+  const hero = el('div', { class: 'album-hero' });
+  const heroImg = el('img', { class: 'album-hero__img', src: '', alt: albumTitle });
+  const heroInfo = el('div', { class: 'album-hero__info' });
+  heroInfo.appendChild(el('h1', { class: 'album-hero__title' }, albumTitle));
+  heroInfo.appendChild(el('div', { class: 'album-hero__artist' }, albumArtist));
+  hero.appendChild(heroImg);
+  hero.appendChild(heroInfo);
+  wrap.appendChild(hero);
+
+  // Loading skeleton
+  const trackList = el('div', { class: 'track-list' });
+  skeletonCards(5).forEach(s => trackList.appendChild(s));
+  wrap.appendChild(trackList);
+
+  // Fetch
+  const { collection, tracks } = await getAlbumTracks(albumId);
+  if (collection?.artworkUrl100) {
+    const imgUrl = collection.artworkUrl100.replace('100x100bb', '600x600bb');
+    heroImg.src = imgUrl;
+  }
+
+  trackList.innerHTML = '';
+  if (!tracks.length) {
+    trackList.appendChild(el('div', { style: 'color:var(--text2);padding:20px' }, 'آهنگی یافت نشد'));
+  } else {
+    tracks.forEach((track, i) => {
+      const row = renderAlbumTrackRow(track, i, tracks);
+      trackList.appendChild(row);
+    });
+  }
+
+  return view;
+}
+
 // ─── Artist Page ───────────────────────────────────────────────────────────
 
 async function renderArtistView(artistName: string): Promise<HTMLElement> {
@@ -363,8 +582,28 @@ async function renderArtistView(artistName: string): Promise<HTMLElement> {
   const wrap = el('div', { style: 'padding:20px' });
   view.appendChild(wrap);
 
-  wrap.appendChild(renderBackButton());
-  wrap.appendChild(el('h1', { class: 'artist-page__name' }, artistName));
+  if (store.canGoBack()) wrap.appendChild(renderBackButton());
+
+  // Artist hero
+  const artistHero = el('div', { class: 'artist-hero' });
+  const artistHeroImg = el('img', { class: 'artist-hero__img', src: '', alt: artistName });
+  const artistHeroInfo = el('div', { class: 'artist-hero__info' });
+  const artistHeroName = el('h1', { class: 'artist-hero__name' }, artistName);
+  const artistHeroMeta = el('div', { class: 'artist-hero__meta' });
+
+  // Radio button
+  const radioBtn = el('button', { class: 'artist-radio-btn' });
+  radioBtn.innerHTML = `${ico.radio} رادیو`;
+  radioBtn.addEventListener('click', () => {
+    startRadio(artistName).catch(() => {});
+  });
+
+  artistHeroInfo.appendChild(artistHeroName);
+  artistHeroInfo.appendChild(artistHeroMeta);
+  artistHeroInfo.appendChild(radioBtn);
+  artistHero.appendChild(artistHeroImg);
+  artistHero.appendChild(artistHeroInfo);
+  wrap.appendChild(artistHero);
 
   // Top tracks section
   const tracksTitle = el('h2', { class: 'artist-page__section-title' }, 'آهنگ‌های برتر');
@@ -374,12 +613,14 @@ async function renderArtistView(artistName: string): Promise<HTMLElement> {
   wrap.appendChild(trackList);
 
   let trackOffset = 0;
-  const PAGE = 20;
+  const INITIAL_PAGE = 30;
+  const LOAD_MORE_PAGE = 20;
 
   const loadMoreTracksBtn = renderLoadMoreBtn(async () => {
-    trackOffset += PAGE;
-    const more = await searchItunes(artistName, PAGE, trackOffset);
+    trackOffset += LOAD_MORE_PAGE;
+    const more = await searchItunes(artistName, LOAD_MORE_PAGE, trackOffset);
     more.forEach((t, i) => trackList.appendChild(renderTrackRow(t, trackOffset + i)));
+    if (more.length < LOAD_MORE_PAGE) loadMoreTracksBtn.remove();
   });
 
   // Albums section
@@ -400,13 +641,29 @@ async function renderArtistView(artistName: string): Promise<HTMLElement> {
   let artistTracks = tracks.filter(t => t.artist.toLowerCase().includes(prefix));
   if (!artistTracks.length) artistTracks = tracks;
 
-  const firstPage = artistTracks.slice(0, PAGE);
+  // Update hero with first track image
+  if (artistTracks.length > 0 && artistTracks[0].imageUrl) {
+    artistHeroImg.src = art(artistTracks[0].imageUrl, 600);
+  }
+
+  // Update meta
+  const genre = artistTracks[0]?.genre;
+  artistHeroMeta.textContent = `${artistTracks.length} آهنگ${genre ? ' • ' + genre : ''}`;
+
+  trackOffset = INITIAL_PAGE;
+  const firstPage = artistTracks.slice(0, INITIAL_PAGE);
   firstPage.forEach((t, i) => trackList.appendChild(renderTrackRow(t, i)));
   wrap.insertBefore(loadMoreTracksBtn, albumsTitle);
 
+  // Sort albums by releaseDate desc
   albumRow.innerHTML = '';
   if (albums.length) {
-    albums.forEach(a => albumRow.appendChild(renderAlbumCard(a)));
+    const sortedAlbums = [...albums].sort((a, b) => {
+      const da = a.year || 0;
+      const db = b.year || 0;
+      return db - da;
+    });
+    sortedAlbums.forEach(a => albumRow.appendChild(renderAlbumCard(a)));
   } else {
     albumRow.appendChild(el('div', { style: 'color:var(--text3);padding:20px;font-size:13px' }, 'بدون نتیجه'));
   }
@@ -436,6 +693,13 @@ async function renderGenreView(initialGenre?: string): Promise<HTMLElement> {
   const tabs = el('div', { class: 'browse-tabs' });
   wrap.appendChild(tabs);
 
+  // Radio button for genre
+  const radioContainer = el('div', { style: 'margin-bottom:16px' });
+  const genreRadioBtn = el('button', { class: 'artist-radio-btn' });
+  genreRadioBtn.innerHTML = `${ico.radio} رادیو`;
+  radioContainer.appendChild(genreRadioBtn);
+  wrap.appendChild(radioContainer);
+
   const content = el('div');
   wrap.appendChild(content);
 
@@ -448,6 +712,7 @@ async function renderGenreView(initialGenre?: string): Promise<HTMLElement> {
   async function loadGenre(idx: number): Promise<void> {
     content.innerHTML = '<div style="padding:40px;color:var(--text2);text-align:center">در حال بارگذاری...</div>';
     const { query } = genreDefs[idx];
+    genreRadioBtn.onclick = () => startRadio(query).catch(() => {});
     const PAGE = 25;
     let offset = 0;
     const tracks = await searchItunes(query, PAGE, offset);
@@ -482,6 +747,97 @@ async function renderGenreView(initialGenre?: string): Promise<HTMLElement> {
   return view;
 }
 
+// ─── Playlist Views ────────────────────────────────────────────────────────
+
+function renderPlaylistDetail(container: HTMLElement, playlistId: string): void {
+  const existing = container.querySelector('.playlist-detail');
+  if (existing) existing.remove();
+
+  const playlists = store.getState().playlists;
+  const pl = playlists.find(p => p.id === playlistId);
+  if (!pl) return;
+
+  const detail = el('div', { class: 'playlist-detail view' });
+  const backBtn = el('button', { class: 'back-btn' });
+  const iconSpan = el('span');
+  iconSpan.innerHTML = ico.chevRight;
+  backBtn.appendChild(iconSpan);
+  backBtn.appendChild(document.createTextNode('بازگشت'));
+  backBtn.addEventListener('click', () => detail.remove());
+  detail.appendChild(backBtn);
+
+  detail.appendChild(el('h2', { class: 'artist-page__section-title' }, pl.name));
+
+  if (!pl.tracks.length) {
+    detail.appendChild(el('div', { class: 'library-empty' }, 'این پلی‌لیست خالی است'));
+  } else {
+    const list = el('div', { class: 'track-list' });
+    pl.tracks.forEach((t, i) => {
+      const row = renderTrackRow(t, i);
+      list.appendChild(row);
+    });
+    detail.appendChild(list);
+  }
+
+  container.appendChild(detail);
+}
+
+async function renderPlaylistsView(): Promise<HTMLElement> {
+  const view = el('div', { class: 'view' });
+  const wrap = el('div', { style: 'padding:20px' });
+  view.appendChild(wrap);
+
+  if (store.canGoBack()) wrap.appendChild(renderBackButton());
+
+  const header = el('div', { class: 'playlists-header' });
+  header.appendChild(el('h1', { class: 'library-heading' }, 'پلی‌لیست‌ها'));
+  const newBtn = el('button', { class: 'playlists-new-btn' });
+  newBtn.innerHTML = `${ico.plus} پلی‌لیست جدید`;
+  newBtn.addEventListener('click', () => openCreatePlaylistModal());
+  header.appendChild(newBtn);
+  wrap.appendChild(header);
+
+  const listEl = el('div', { class: 'playlists-list' });
+  wrap.appendChild(listEl);
+
+  function renderPlaylists(): void {
+    listEl.innerHTML = '';
+    const playlists = store.getState().playlists;
+    if (!playlists.length) {
+      listEl.appendChild(el('div', { class: 'library-empty' }, 'هنوز پلی‌لیستی ندارید'));
+      return;
+    }
+    playlists.forEach((pl: Playlist) => {
+      const item = el('div', { class: 'playlist-item' });
+      const artWrap = el('div', { class: 'playlist-item__art' });
+      if (pl.tracks.length > 0) {
+        const img = el('img', { src: art(pl.tracks[0].imageUrl, 100), alt: pl.name });
+        artWrap.appendChild(img);
+      }
+      item.appendChild(artWrap);
+      const info = el('div', { class: 'playlist-item__info' });
+      info.appendChild(el('div', { class: 'playlist-item__name' }, pl.name));
+      info.appendChild(el('div', { class: 'playlist-item__count' }, `${pl.tracks.length} آهنگ`));
+      item.appendChild(info);
+      const delBtn = el('button', { class: 'playlist-item__del' }, '🗑');
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        store.deletePlaylist(pl.id);
+      });
+      item.appendChild(delBtn);
+      item.addEventListener('click', () => {
+        renderPlaylistDetail(wrap, pl.id);
+      });
+      listEl.appendChild(item);
+    });
+  }
+
+  renderPlaylists();
+  store.on('playlists', renderPlaylists);
+
+  return view;
+}
+
 // ─── Views ─────────────────────────────────────────────────────────────────
 
 async function renderHomeView(): Promise<HTMLElement> {
@@ -489,17 +845,22 @@ async function renderHomeView(): Promise<HTMLElement> {
   const heroEl = renderHero();
   view.appendChild(heroEl);
 
-  const hotSec  = renderSection('آهنگ‌های داغ',         'track', () => store.setView('browse'));
-  const newSec  = renderSection('جدیدترین آلبوم‌ها',    'album');
-  const vidSec  = renderSection('برترین موزیک ویدیوها', 'video', () => store.setView('browse'));
-  const popSec  = renderSection('موزیک پاپ',             'track');
-  const rockSec = renderSection('موزیک راک',             'track');
+  const hotSec   = renderSection('داغ‌ترین آهنگ‌ها',        'track', () => store.setView('browse'));
+  const newSec   = renderSection('جدیدترین آلبوم‌ها',       'album');
+  const vidSec   = renderSection('برترین موزیک ویدیوها',    'video', () => store.setView('browse'));
+  const persianSec2 = renderSection('موزیک ایرانی 🇮🇷',      'track');
+  const popSec   = renderSection('پاپ برتر',                'track');
+  const rockSec  = renderSection('راک',                     'track');
+  const hipSec   = renderSection('هیپ‌هاپ',                 'track');
+  const rnbSec   = renderSection('R&B',                     'track');
+  const classicSec = renderSection('کلاسیک‌های موسیقی',     'track');
+  const elecSec  = renderSection('موزیک الکترونیک',         'track');
+  const worldSec = renderSection('جدیدترین‌های جهانی',      'track');
 
   view.appendChild(hotSec.el);
   view.appendChild(newSec.el);
   view.appendChild(vidSec.el);
-  view.appendChild(popSec.el);
-  view.appendChild(rockSec.el);
+  view.appendChild(persianSec2.el);
 
   // Artists section
   const artistsSec = el('div', { class: 'section' });
@@ -511,22 +872,16 @@ async function renderHomeView(): Promise<HTMLElement> {
   artistsSec.appendChild(artistsRow);
   view.appendChild(artistsSec);
 
-  // Persian music section
-  const persianSec = el('div', { class: 'section' });
-  const persianHeader = el('div', { class: 'section__header' });
-  persianHeader.appendChild(el('h2', { class: 'section__title' }, 'موزیک ایرانی 🇮🇷'));
-  persianSec.appendChild(persianHeader);
-  const persianRow = el('div', { class: 'scroll-row' });
-  skeletonCards(6).forEach(s => persianRow.appendChild(s));
-  persianSec.appendChild(persianRow);
-  view.appendChild(persianSec);
-
-  // All sections load in parallel — first result wins for each slot
-  const songsQueries = ['top songs', 'billboard hot 100', 'best music 2024'];
-  const albumQueries = ['best albums 2024', 'new releases music', 'popular albums'];
-  const videoQueries = ['official music video 2024', 'vevo music video', 'music video'];
+  view.appendChild(popSec.el);
+  view.appendChild(rockSec.el);
+  view.appendChild(hipSec.el);
+  view.appendChild(rnbSec.el);
+  view.appendChild(classicSec.el);
+  view.appendChild(elecSec.el);
+  view.appendChild(worldSec.el);
 
   // Hot tracks
+  const songsQueries = ['top songs', 'billboard hot 100', 'best music 2024'];
   (async () => {
     for (const q of songsQueries) {
       const tracks = await searchItunes(q, 25);
@@ -538,7 +893,7 @@ async function renderHomeView(): Promise<HTMLElement> {
     }
   })();
 
-  // RSS charts override iTunes results if available
+  // RSS charts override
   getTopSongs(25).then(tracks => {
     if (!tracks.length) return;
     if (tracks.some(t => t.audioUrl)) {
@@ -553,6 +908,7 @@ async function renderHomeView(): Promise<HTMLElement> {
   });
 
   // Albums
+  const albumQueries = ['best albums 2024', 'new releases music', 'popular albums'];
   (async () => {
     for (const q of albumQueries) {
       const albums = await searchAlbums(q, 20);
@@ -562,6 +918,7 @@ async function renderHomeView(): Promise<HTMLElement> {
   getNewAlbums(20).then(albums => { if (albums.length) newSec.fill(albums); });
 
   // Videos
+  const videoQueries = ['official music video 2024', 'vevo music video', 'music video'];
   (async () => {
     for (const q of videoQueries) {
       const vids = await searchMusicVideos(q, 16);
@@ -574,23 +931,33 @@ async function renderHomeView(): Promise<HTMLElement> {
     enrichWithPreviews(tracks, enriched => vidSec.fill(enriched));
   });
 
-  // Pop & Rock sections
+  // Genre sections
   searchItunes('pop music', 20).then(t => { if (t.length) popSec.fill(t); });
   searchItunes('rock music', 20).then(t => { if (t.length) rockSec.fill(t); });
+  searchItunes('hip hop', 20).then(t => { if (t.length) hipSec.fill(t); });
+  searchItunes('rnb music', 20).then(t => { if (t.length) rnbSec.fill(t); });
+  searchItunes('classical music', 20).then(t => { if (t.length) classicSec.fill(t); });
+  searchItunes('electronic music', 20).then(t => { if (t.length) elecSec.fill(t); });
+  searchItunes('world music 2024', 20).then(t => { if (t.length) worldSec.fill(t); });
 
-  // Artists section
-  searchItunes('top artists', 20).then(tracks => {
+  // Artists section — fetch multiple queries in parallel, dedupe, shuffle
+  const artistQueries = ['pop', 'rock', 'hip hop', 'r&b', 'electronic', 'jazz', 'country', 'latin', 'indie', 'k-pop'];
+  Promise.all(artistQueries.map(q => searchItunes(q, 10))).then(results => {
     const seen = new Set<string>();
     const unique: Array<{ name: string; imageUrl: string }> = [];
-    for (const t of tracks) {
-      if (!seen.has(t.artist)) {
-        seen.add(t.artist);
-        unique.push({ name: t.artist, imageUrl: t.imageUrl });
+    for (const tracks of results) {
+      for (const t of tracks) {
+        if (!seen.has(t.artist)) {
+          seen.add(t.artist);
+          unique.push({ name: t.artist, imageUrl: t.imageUrl });
+        }
       }
     }
+    // Shuffle
+    const shuffled = unique.sort(() => Math.random() - 0.5).slice(0, 50);
     artistsRow.innerHTML = '';
-    if (unique.length) {
-      unique.forEach(a => artistsRow.appendChild(renderArtistCard(a.name, a.imageUrl)));
+    if (shuffled.length) {
+      shuffled.forEach(a => artistsRow.appendChild(renderArtistCard(a.name, a.imageUrl)));
     } else {
       artistsRow.appendChild(el('div', { style: 'color:var(--text3);padding:20px;font-size:13px' }, 'بدون نتیجه'));
     }
@@ -607,13 +974,11 @@ async function renderHomeView(): Promise<HTMLElement> {
     for (const queryFn of persianQueries) {
       const tracks = await queryFn();
       if (tracks.length) {
-        persianRow.innerHTML = '';
-        tracks.forEach(t => persianRow.appendChild(renderTrackCard(t)));
+        persianSec2.fill(tracks);
         return;
       }
     }
-    persianRow.innerHTML = '';
-    persianRow.appendChild(el('div', { style: 'color:var(--text3);padding:20px;font-size:13px' }, 'بدون نتیجه'));
+    persianSec2.fill([]);
   })();
 
   return view;
@@ -681,9 +1046,23 @@ async function renderBrowseView(): Promise<HTMLElement> {
       } else {
         const h = el('h2', { style: 'font-size:20px;font-weight:800;margin-bottom:16px' }, 'برترین موزیک ویدیوها');
         const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px' });
-        vidLoaded.forEach(t => grid.appendChild(renderVideoCard(t)));
+        const initialCount = 20;
+        let shownCount = 0;
+        const showBatch = (items: Track[], from: number, count: number) => {
+          items.slice(from, from + count).forEach(t => grid.appendChild(renderVideoCard(t)));
+          shownCount = from + count;
+        };
+        showBatch(vidLoaded, 0, initialCount);
         content.appendChild(h);
         content.appendChild(grid);
+
+        if (vidLoaded.length > initialCount) {
+          const loadMoreBtn = renderLoadMoreBtn(async () => {
+            showBatch(vidLoaded, shownCount, 20);
+            if (shownCount >= vidLoaded.length) loadMoreBtn.remove();
+          });
+          content.appendChild(loadMoreBtn);
+        }
       }
     } else if (key === 'genres') {
       const genreList = [
@@ -757,44 +1136,82 @@ function renderSearchView(): HTMLElement {
   barWrap.appendChild(input);
   view.appendChild(barWrap);
 
+  // Search tabs
+  const searchTabsEl = el('div', { class: 'browse-tabs search-tabs' });
+  const searchTabDefs = [
+    { label: 'آهنگ‌ها', key: 'songs' },
+    { label: 'ویدیوها', key: 'videos' },
+    { label: 'آلبوم‌ها', key: 'albums' },
+  ];
+  let activeSearchTab = 'songs';
+  const searchTabBtns: HTMLButtonElement[] = [];
+
+  searchTabDefs.forEach(({ label, key }) => {
+    const btn = el('button', { class: `browse-tab${key === activeSearchTab ? ' active' : ''}` }, label) as HTMLButtonElement;
+    btn.addEventListener('click', () => {
+      activeSearchTab = key;
+      searchTabBtns.forEach((b, i) => b.classList.toggle('active', searchTabDefs[i].key === key));
+      doSearch(input.value.trim());
+    });
+    searchTabsEl.appendChild(btn);
+    searchTabBtns.push(btn);
+  });
+  view.appendChild(searchTabsEl);
+
   const resultsWrap = el('div', { class: 'results-wrap' });
   view.appendChild(resultsWrap);
 
   let debounce: ReturnType<typeof setTimeout> | null = null;
 
-  function showResults(tracks: Track[]): void {
+  async function doSearch(q: string): Promise<void> {
+    if (!q) { resultsWrap.innerHTML = ''; return; }
     resultsWrap.innerHTML = '';
-    if (!tracks.length) {
-      resultsWrap.appendChild(el('div', { class: 'search-empty' }, 'نتیجه‌ای پیدا نشد'));
-      return;
-    }
-    const grid = el('div', { class: 'results-grid' });
-    tracks.forEach(t => grid.appendChild(renderTrackCard(t)));
-    resultsWrap.appendChild(grid);
-  }
+    const loadEl = el('div', { class: 'results-grid' });
+    skeletonCards(12).forEach(s => loadEl.appendChild(s));
+    resultsWrap.appendChild(loadEl);
 
-  function showLoading(): void {
-    resultsWrap.innerHTML = '';
-    const grid = el('div', { class: 'results-grid' });
-    skeletonCards(12).forEach(s => grid.appendChild(s));
-    resultsWrap.appendChild(grid);
+    if (activeSearchTab === 'songs') {
+      const songs = await searchItunes(q, 25);
+      resultsWrap.innerHTML = '';
+      if (!songs.length) {
+        resultsWrap.appendChild(el('div', { class: 'search-empty' }, 'نتیجه‌ای پیدا نشد'));
+      } else {
+        const grid = el('div', { class: 'results-grid' });
+        songs.forEach(t => grid.appendChild(renderTrackCard(t)));
+        resultsWrap.appendChild(grid);
+        store.setSearchResults(q, songs);
+      }
+    } else if (activeSearchTab === 'videos') {
+      const vids = await searchMusicVideos(q, 20);
+      resultsWrap.innerHTML = '';
+      if (!vids.length) {
+        resultsWrap.appendChild(el('div', { class: 'search-empty' }, 'نتیجه‌ای پیدا نشد'));
+      } else {
+        const grid = el('div', { class: 'results-grid' });
+        vids.forEach(t => grid.appendChild(renderVideoCard(t)));
+        resultsWrap.appendChild(grid);
+      }
+    } else if (activeSearchTab === 'albums') {
+      const albums = await searchAlbums(q, 25);
+      resultsWrap.innerHTML = '';
+      if (!albums.length) {
+        resultsWrap.appendChild(el('div', { class: 'search-empty' }, 'نتیجه‌ای پیدا نشد'));
+      } else {
+        const grid = el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;margin-top:8px' });
+        albums.forEach(a => grid.appendChild(renderAlbumCard(a)));
+        resultsWrap.appendChild(grid);
+      }
+    }
   }
 
   input.addEventListener('input', () => {
     const q = input.value.trim();
     if (debounce) clearTimeout(debounce);
-    if (!q) { resultsWrap.innerHTML = ''; return; }
-    debounce = setTimeout(async () => {
-      showLoading();
-      const [songs, vids] = await Promise.all([searchItunes(q, 20), searchMusicVideos(q, 6)]);
-      const all = [...songs, ...vids];
-      showResults(all);
-      store.setSearchResults(q, all);
-    }, 400);
+    debounce = setTimeout(() => doSearch(q), 400);
   });
 
-  const { query, results } = store.getState().search;
-  if (query) { input.value = query; showResults(results); }
+  const { query } = store.getState().search;
+  if (query) { input.value = query; doSearch(query); }
 
   return view;
 }
@@ -832,10 +1249,11 @@ function renderSidebar(): HTMLElement {
 
   const nav = el('nav');
   const navDefs: { view: View; label: string; ico: string }[] = [
-    { view: 'home',    label: 'گوش کن',   ico: ico.home },
-    { view: 'browse',  label: 'مرور',      ico: ico.compass },
-    { view: 'search',  label: 'جستجو',     ico: ico.search },
-    { view: 'library', label: 'کتابخانه',  ico: ico.library },
+    { view: 'home',      label: 'گوش کن',      ico: ico.home },
+    { view: 'browse',    label: 'مرور',         ico: ico.compass },
+    { view: 'search',    label: 'جستجو',        ico: ico.search },
+    { view: 'library',   label: 'کتابخانه',     ico: ico.library },
+    { view: 'playlists', label: 'پلی‌لیست‌ها',  ico: ico.list },
   ];
 
   const itemEls: HTMLElement[] = [];
@@ -851,10 +1269,13 @@ function renderSidebar(): HTMLElement {
   });
 
   store.on<View>('view', v => {
-    // Highlight the base view: artist/genre/persian highlight their parent tabs
-    const activeView = (['home', 'browse', 'search', 'library'] as View[]).includes(v)
+    // Highlight the base view
+    const baseViews: View[] = ['home', 'browse', 'search', 'library', 'playlists'];
+    const activeView = baseViews.includes(v)
       ? v
-      : v === 'artist' || v === 'genre' || v === 'persian' ? 'home' : v;
+      : (v === 'artist' || v === 'genre' || v === 'persian') ? 'home'
+      : v === 'album' ? 'browse'
+      : v;
     itemEls.forEach((item, i) => item.classList.toggle('active', navDefs[i].view === activeView));
   });
 
@@ -1226,6 +1647,8 @@ export function initApp(root: HTMLElement): void {
     else if (view === 'library') v = renderLibraryView();
     else if (view === 'artist') v = await renderArtistView(context?.artistName || '');
     else if (view === 'genre') v = await renderGenreView(context?.genre);
+    else if (view === 'album') v = await renderAlbumView(context?.albumId || '', context?.albumTitle || '', context?.albumArtist || '');
+    else if (view === 'playlists') v = await renderPlaylistsView();
     else v = await renderHomeView();
     main.appendChild(v);
     viewEl = v;
@@ -1234,4 +1657,24 @@ export function initApp(root: HTMLElement): void {
 
   store.on<NavEntry>('nav', entry => loadView(entry));
   loadView(store.getCurrentNavEntry() || { view: 'home' });
+
+  // Auto-play: append more tracks when near end of queue
+  store.on<PlayerState>('player', async (ps) => {
+    if (!ps.isPlaying && ps.queueIndex >= ps.queue.length - 1 && ps.queue.length > 0 && autoPlayQuery) {
+      const more = await searchItunes(autoPlayQuery, 25, autoPlayOffset);
+      if (more.length) {
+        autoPlayOffset += 25;
+        const newQueue = [...ps.queue, ...more];
+        store.updatePlayer({ queue: newQueue });
+      }
+    }
+  });
+
+  // Suppress unused variable warning
+  void radioQuery;
+
+  // Service Worker registration for PWA
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
 }

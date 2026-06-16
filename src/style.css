@@ -123,23 +123,128 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   padding: 0 0 32px;
 }
 
-/* ── Greeting ── */
-.greeting {
-  padding: 36px 32px 12px;
-  background: linear-gradient(180deg, rgba(255,107,0,0.07) 0%, transparent 100%);
+/* ── Hero Section ── */
+.hero-wrapper { display: contents; }
+
+.hero-section {
+  position: relative;
+  height: 340px;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
-.greeting__title {
-  font-size: clamp(1.6rem, 4vw, 2.4rem);
+.hero-section--loading {
+  background: var(--bg2);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.hero-bg__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(36px) brightness(0.35) saturate(1.4);
+  transform: scale(1.18);
+  transition: opacity 0.5s;
+}
+
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(12,12,14,0.97) 0%,
+    rgba(12,12,14,0.45) 55%,
+    rgba(12,12,14,0.1) 100%
+  );
+}
+
+.hero-content {
+  position: absolute;
+  bottom: 52px;
+  right: 36px;
+  left: 36px;
+  z-index: 1;
+}
+
+.hero-artist {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.hero-title {
+  font-size: clamp(1.5rem, 3.5vw, 2.4rem);
   font-weight: 800;
+  color: #fff;
+  line-height: 1.15;
   letter-spacing: -0.5px;
+  text-shadow: 0 2px 16px rgba(0,0,0,0.6);
+  margin-bottom: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.greeting__sub {
-  font-size: 14px;
-  color: var(--text2);
-  margin-top: 6px;
+.hero-play-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 100px;
+  padding: 10px 24px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+  box-shadow: 0 4px 20px var(--accent-glow);
 }
+
+.hero-play-btn:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+  box-shadow: 0 6px 28px var(--accent-glow);
+}
+
+.hero-dots {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 1;
+}
+
+.hero-dot {
+  height: 6px;
+  width: 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.3);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.25s, width 0.25s;
+}
+
+.hero-dot--active {
+  background: var(--accent);
+  width: 20px;
+}
+
+/* ── Quick Grid ── */
+.quick-wrapper { display: contents; }
 
 /* ── Quick Access Grid ── */
 .quick-grid {
@@ -765,6 +870,90 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .source-tag--audius { background: rgba(204,15,224,0.15); color: #cc0fe0; }
 .source-tag--biamusic { background: rgba(14,165,233,0.15); color: #0ea5e9; }
 .source-tag--sevilmusic { background: rgba(245,158,11,0.15); color: #f59e0b; }
+
+/* ── Video Card ── */
+.video-card {
+  flex: 0 0 220px;
+  min-width: 220px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg2);
+  cursor: pointer;
+  transition: transform 0.18s;
+  border: 1px solid var(--border);
+}
+
+.video-card:hover { transform: translateY(-3px); }
+
+.video-card__thumb {
+  position: relative;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  background: var(--bg3);
+}
+
+.video-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s;
+}
+
+.video-card:hover .video-card__img { transform: scale(1.05); }
+
+.video-card__play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.3);
+  opacity: 0;
+  transition: opacity 0.2s;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+}
+
+.video-card:hover .video-card__play { opacity: 1; }
+
+.video-card__play svg { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)); }
+
+.video-card__badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255,107,0,0.9);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+
+.video-card__info {
+  padding: 10px 12px 12px;
+}
+
+.video-card__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.video-card__artist {
+  font-size: 12px;
+  color: var(--text2);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ── Buttons ── */
 .btn-icon {
@@ -1606,9 +1795,13 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   .search-header { padding: 16px; }
   .search-results { padding: 0 16px; }
   .view-header { padding: 24px 16px 12px; }
-  .greeting { padding: 20px 16px 8px; }
   .quick-grid { grid-template-columns: repeat(2, 1fr); padding: 10px 16px; }
   .section-header { padding: 8px 16px 10px; }
   .scroll-row { padding: 4px 16px 12px; }
   .genres-grid { grid-template-columns: repeat(2, 1fr); padding: 4px 16px 32px; }
+
+  .hero-section { height: 240px; }
+  .hero-content { bottom: 44px; right: 16px; left: 16px; }
+  .hero-title { font-size: 1.3rem; margin-bottom: 14px; }
+  .hero-play-btn { padding: 8px 18px; font-size: 14px; }
 }

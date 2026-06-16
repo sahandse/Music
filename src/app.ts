@@ -23,6 +23,7 @@ import { getSyncedLyrics } from './api/lrclib'
 import type { LyricLine } from './api/lrclib'
 import { getPersianPodcasts } from './api/persian-podcasts'
 import { getTopSongs, getTopAlbums, getGenreSongs, GENRES } from './api/itunes-charts'
+import { searchItunesVideos } from './api/itunes-videos'
 import type { Track, Album, Podcast, View, PlayerState, SearchState } from './types'
 
 function formatTime(seconds: number): string {
@@ -316,63 +317,161 @@ function renderGenresSection(): HTMLElement {
   return section;
 }
 
-function renderHomeView(): HTMLElement {
-  const view = el('div', { class: 'view home-view' });
+// ── Hero Section ──────────────────────────────────────────────────────────────
 
-  // Greeting
-  const greetWrap = el('div', { class: 'greeting' });
-  greetWrap.append(
-    el('h1', { class: 'greeting__title' }, greeting()),
-    el('p', { class: 'greeting__sub' }, 'امروز چه می‌شنوید؟'),
-  );
-  view.appendChild(greetWrap);
+function renderHeroSection(tracks: Track[]): HTMLElement {
+  const section = el('div', { class: 'hero-section' });
+  if (!tracks.length) return section;
 
-  // Quick grid skeleton → replaced when data loads
-  const quickPlaceholder = renderQuickGridSkeleton();
-  view.appendChild(quickPlaceholder);
+  let current = 0;
+  let timer: ReturnType<typeof setTimeout>;
 
-  // Sections with skeletons
-  const { section: topSongsSection, row: topSongsRow } = renderSection('پرطرفدارترین آهنگ‌ها', () => {
-    store.setView('search');
-    getTopSongs(40).then(r => store.setSearchResults('پرطرفدارترین آهنگ‌ها', r));
+  const bg = el('div', { class: 'hero-bg' });
+  const bgImg = el('img', { class: 'hero-bg__img', src: tracks[0].imageUrl || '', alt: '' });
+  bg.appendChild(bgImg);
+
+  const overlay = el('div', { class: 'hero-overlay' });
+  const content = el('div', { class: 'hero-content' });
+  const artistEl = el('p', { class: 'hero-artist' }, tracks[0].artist);
+  const titleEl = el('h2', { class: 'hero-title' }, tracks[0].title);
+  const playBtn = el('button', { class: 'hero-play-btn' });
+  playBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M8 5v14l11-7z"/></svg><span>پخش</span>`;
+  playBtn.addEventListener('click', () => player.playTrack(tracks[current]));
+  content.append(artistEl, titleEl, playBtn);
+
+  const dotsEl = el('div', { class: 'hero-dots' });
+  const dotBtns: HTMLElement[] = tracks.map((_, i) => {
+    const dot = el('button', { class: `hero-dot${i === 0 ? ' hero-dot--active' : ''}`, 'aria-label': `اسلاید ${i + 1}` });
+    dot.addEventListener('click', () => { clearTimeout(timer); show(i); scheduleNext(); });
+    dotsEl.appendChild(dot);
+    return dot;
   });
 
+  section.append(bg, overlay, content, dotsEl);
+
+  function show(idx: number): void {
+    current = ((idx % tracks.length) + tracks.length) % tracks.length;
+    const t = tracks[current];
+    (bgImg as HTMLImageElement).src = t.imageUrl || '';
+    titleEl.textContent = t.title;
+    artistEl.textContent = t.artist;
+    dotBtns.forEach((d, i) => d.classList.toggle('hero-dot--active', i === current));
+  }
+
+  function scheduleNext(): void {
+    timer = setTimeout(() => { show(current + 1); scheduleNext(); }, 7000);
+  }
+
+  scheduleNext();
+  section.addEventListener('mouseenter', () => clearTimeout(timer));
+  section.addEventListener('mouseleave', () => { clearTimeout(timer); scheduleNext(); });
+
+  return section;
+}
+
+// ── Video Card ────────────────────────────────────────────────────────────────
+
+function renderVideoCard(track: Track): HTMLElement {
+  const card = el('div', { class: 'video-card' });
+
+  const thumb = el('div', { class: 'video-card__thumb' });
+  const img = el('img', { class: 'video-card__img', src: track.imageUrl || '', alt: track.title });
+  fallbackImg(img as HTMLImageElement, track.title, '1a1a2e');
+  const playOverlay = el('button', { class: 'video-card__play', 'aria-label': 'پخش ویدیو' });
+  playOverlay.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" width="40" height="40"><path d="M8 5v14l11-7z"/></svg>`;
+  const badge = el('span', { class: 'video-card__badge' }, 'ویدیو');
+  thumb.append(img, playOverlay, badge);
+
+  const info = el('div', { class: 'video-card__info' });
+  info.append(
+    el('p', { class: 'video-card__title' }, track.title),
+    el('p', { class: 'video-card__artist' }, track.artist),
+  );
+  card.append(thumb, info);
+
+  card.addEventListener('click', () => {
+    const videoLinks = (track.mediaLinks || []).filter(l => l.type === 'video');
+    const videoUrl = track.videoUrl || videoLinks[0]?.url;
+    if (videoUrl) openVideoOverlay(track.title, track.artist, videoUrl, videoLinks);
+    else if (track.audioUrl) player.playTrack(track);
+  });
+
+  return card;
+}
+
+// ── Home Page ─────────────────────────────────────────────────────────────────
+
+function renderHomeView(): HTMLElement {
+  const view = el('div', { class: 'view home-view' });
+  const { settings: s } = store.getState();
+
+  // Hero wrapper — replaced when data arrives
+  const heroWrapper = el('div', { class: 'hero-wrapper' });
+  heroWrapper.appendChild(el('div', { class: 'hero-section hero-section--loading' }));
+  view.appendChild(heroWrapper);
+
+  // Quick grid wrapper — replaced when data arrives
+  const quickWrapper = el('div', { class: 'quick-wrapper' });
+  quickWrapper.appendChild(renderQuickGridSkeleton());
+  view.appendChild(quickWrapper);
+
+  const setHero = (tracks: Track[]) => {
+    heroWrapper.innerHTML = '';
+    if (tracks.length) heroWrapper.appendChild(renderHeroSection(tracks));
+  };
+  const setQuick = (tracks: Track[]) => {
+    quickWrapper.innerHTML = '';
+    quickWrapper.appendChild(renderQuickGrid(tracks));
+  };
+
+  // ── جدیدترین موزیک ایرانی ─────────────────────────────────────────────────
+  const { section: iranianSection, row: iranianRow } = renderSection('جدیدترین موزیک ایرانی', () => {
+    store.setSearchLoading(true);
+    store.setView('search');
+    getNewestIranianTracks().then(r => store.setSearchResults('جدیدترین موزیک ایرانی', r)).catch(() => store.setSearchError('خطا'));
+  });
+
+  // ── Apple Music برترین‌ها ──────────────────────────────────────────────────
+  const { section: appleMusicSection, row: appleMusicRow } = renderSection('Apple Music برترین‌ها', () => {
+    store.setView('search');
+    getTopSongs(40).then(r => store.setSearchResults('Apple Music برترین‌ها', r));
+  });
+
+  // ── موزیک ویدیو ───────────────────────────────────────────────────────────
+  const { section: videoSection, row: videoRow } = renderSection('موزیک ویدیو', () => {
+    store.setSearchLoading(true);
+    store.setView('search');
+    searchItunesVideos('music video 2024', 40).then(r => store.setSearchResults('موزیک ویدیو', r)).catch(() => store.setSearchError('خطا'));
+  });
+
+  // ── هنرمندان برتر ──────────────────────────────────────────────────────────
   const { section: artistsSection, row: artistsRow } = renderSection('هنرمندان برتر');
 
+  // ── بهترین آلبوم‌ها ────────────────────────────────────────────────────────
   const { section: topAlbumsSection, row: topAlbumsRow } = renderSection('بهترین آلبوم‌ها', () => {
     store.setView('search');
     searchItunes('top albums').then(r => store.setSearchResults('بهترین آلبوم‌ها', r));
   });
 
-  // Iranian music section
-  const { section: iranianSection, row: iranianRow } = renderSection('موزیک ایرانی برتر', () => {
+  // ── موزیک ویدیو ایرانی (Crawler, optional) ────────────────────────────────
+  const { section: crawlerVideoSection, row: crawlerVideoRow } = renderSection('موزیک ویدیو ایرانی', () => {
     store.setSearchLoading(true);
     store.setView('search');
-    searchNex1Music('ایرانی').then(r => store.setSearchResults('موزیک ایرانی', r)).catch(() => store.setSearchError('خطا'));
+    const { crawlerApiUrl } = store.getState().settings;
+    if (crawlerApiUrl) {
+      crawlerCatalog(crawlerApiUrl, { type: 'video' }).then(r => store.setSearchResults('موزیک ویدیو ایرانی', r)).catch(() => store.setSearchError('خطا'));
+    }
   });
+  if (!s.crawlerApiUrl) crawlerVideoSection.style.display = 'none';
 
-  // BiaMusic recent section
-  const { section: biamusicSection, row: biamusicRow } = renderSection('جدیدترین آهنگ‌های بیاموزیک', () => {
-    store.setSearchLoading(true);
-    store.setView('search');
-    getRecentBiaMusicTracks(20).then(r => store.setSearchResults('بیاموزیک', r)).catch(() => store.setSearchError('خطا'));
-  });
-
-  // SevilMusic recent section
-  const { section: sevilSection, row: sevilRow } = renderSection('جدیدترین آهنگ‌های سویل موزیک', () => {
-    store.setSearchLoading(true);
-    store.setView('search');
-    getRecentSevilMusicTracks(20).then(r => store.setSearchResults('سویل موزیک', r)).catch(() => store.setSearchError('خطا'));
-  });
-
-  // Global trending (ListenBrainz top tracks)
+  // ── ترندهای هفته جهانی ────────────────────────────────────────────────────
   const { section: trendingSection, row: trendingRow } = renderSection('ترندهای هفته جهانی', () => {
     store.setSearchLoading(true);
     store.setView('search');
     getTrendingAudius().then(r => store.setSearchResults('ترندهای جهانی', r)).catch(() => store.setSearchError('خطا'));
   });
 
-  // Persian podcasts section
+  // ── پادکست‌های فارسی ──────────────────────────────────────────────────────
   const podcastSection = el('section', { class: 'music-section' });
   const podcastHeader = el('div', { class: 'section-header' });
   podcastHeader.appendChild(el('h2', {}, 'پادکست‌های فارسی'));
@@ -384,112 +483,116 @@ function renderHomeView(): HTMLElement {
   }
   podcastSection.append(podcastHeader, podcastRow);
 
-  const { settings: s } = store.getState();
-
-  // Crawler: Music Video section (shown only when crawlerApiUrl is set)
-  const { section: videoSection, row: videoRow } = renderSection('موزیک ویدیو ایرانی', () => {
-    store.setSearchLoading(true);
-    store.setView('search');
-    const { crawlerApiUrl } = store.getState().settings;
-    if (crawlerApiUrl) {
-      crawlerCatalog(crawlerApiUrl, { type: 'video' })
-        .then(r => store.setSearchResults('موزیک ویدیو', r))
-        .catch(() => store.setSearchError('خطا'));
-    }
-  });
-  if (!s.crawlerApiUrl) videoSection.style.display = 'none';
-
-  view.append(topSongsSection, artistsSection, topAlbumsSection, iranianSection, biamusicSection, sevilSection, videoSection, trendingSection, podcastSection);
+  view.append(
+    iranianSection, appleMusicSection, videoSection,
+    artistsSection, topAlbumsSection, crawlerVideoSection,
+    trendingSection, podcastSection,
+  );
   view.appendChild(renderGenresSection());
 
-  // Load chart data (iTunes charts for songs/albums/quick-grid)
-  Promise.all([getTopSongs(20), getTopAlbums(20)])
-    .then(([songs, albums]) => {
-      const quickGrid = renderQuickGrid(songs);
-      view.replaceChild(quickGrid, quickPlaceholder);
-      fillTrackRow(topSongsRow, songs);
-      fillArtistRow(artistsRow, songs); // initial artist list from iTunes
+  // ── Data Loading ───────────────────────────────────────────────────────────
+
+  // iTunes charts: Apple Music section + artists + quick grid + initial hero
+  let iranianLoaded = false;
+  getTopSongs(20)
+    .then(songs => {
+      if (!iranianLoaded) {
+        setHero(songs.slice(0, 5));
+        setQuick(songs);
+      }
+      fillTrackRow(appleMusicRow, songs);
+      fillArtistRow(artistsRow, songs);
+    })
+    .catch(() => {
+      quickWrapper.innerHTML = '';
+    });
+
+  // Albums
+  getTopAlbums(20)
+    .then(albums => {
       if (albums.length > 0) {
         fillAlbumRow(topAlbumsRow, albums);
       } else {
-        // Fallback: TheAudioDB popular albums
         getPopularAlbums().then(adbAlbums => {
-          const converted = adbAlbums.map(a => ({
+          fillAlbumRow(topAlbumsRow, adbAlbums.map(a => ({
             id: a.id, title: a.title, artist: a.artist,
             imageUrl: a.imageUrl, genre: a.genre, year: a.year ? Number(a.year) : undefined,
-          }));
-          fillAlbumRow(topAlbumsRow, converted);
+          })));
         }).catch(() => {});
       }
     })
     .catch(() => {
-      topSongsRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
-      // Still try TheAudioDB albums
       getPopularAlbums().then(adbAlbums => {
-        const converted = adbAlbums.map(a => ({
+        fillAlbumRow(topAlbumsRow, adbAlbums.map(a => ({
           id: a.id, title: a.title, artist: a.artist,
           imageUrl: a.imageUrl, genre: a.genre, year: a.year ? Number(a.year) : undefined,
-        }));
-        fillAlbumRow(topAlbumsRow, converted);
+        })));
       }).catch(() => {});
     });
 
-  // Upgrade artists section with real ListenBrainz weekly top artists
-  getTopArtists(20)
-    .then(lbArtists => {
-      if (!lbArtists.length) return;
-      const fakeTracks: Track[] = lbArtists.map((a, i) => ({
-        id: `lb_a_${i}`, title: '', artist: a.name, album: '',
-        duration: 0, imageUrl: '', audioUrl: '', source: 'musicbrainz' as const,
-      }));
-      fillArtistRow(artistsRow, fakeTracks);
-    })
-    .catch(() => {});
+  // Iranian music: combine all enabled Persian sources
+  const iranianSources: Promise<Track[]>[] = [];
+  if (s.enabledSources.majidapi) iranianSources.push(getNewestIranianTracks().catch(() => []));
+  if (s.enabledSources.biamusic) iranianSources.push(getRecentBiaMusicTracks(10).catch(() => []));
+  if (s.enabledSources.sevilmusic) iranianSources.push(getRecentSevilMusicTracks(10).catch(() => []));
+  if (s.enabledSources.nex1music) iranianSources.push(getIranianCharts().catch(() => []));
 
-  // Iranian charts — MajidAPI first, then Deezer, then nex1music fallback
-  getNewestIranianTracks()
-    .then(tracks => tracks.length ? tracks : getDeezerIranianCharts())
-    .then(tracks => tracks.length ? tracks : getIranianCharts())
-    .then(tracks => fillTrackRow(iranianRow, tracks))
-    .catch(() => {
+  if (iranianSources.length > 0) {
+    Promise.all(iranianSources).then(results => {
+      const all = results.flat();
+      const seen = new Set<string>();
+      const unique = all.filter(t => {
+        const key = `${t.title.toLowerCase()}_${t.artist.toLowerCase()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if (unique.length > 0) {
+        iranianLoaded = true;
+        fillTrackRow(iranianRow, unique);
+        setHero(unique.slice(0, 5));
+        setQuick(unique);
+      } else {
+        iranianSection.style.display = 'none';
+      }
+    }).catch(() => {
       iranianRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`;
     });
-
-  // BiaMusic recent tracks
-  if (s.enabledSources.biamusic) {
-    getRecentBiaMusicTracks(10)
-      .then(tracks => {
-        if (tracks.length) fillTrackRow(biamusicRow, tracks);
-        else biamusicRow.innerHTML = `<p class="section-error">آهنگی یافت نشد</p>`;
-      })
-      .catch(() => { biamusicRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`; });
   } else {
-    biamusicSection.style.display = 'none';
+    iranianSection.style.display = 'none';
   }
 
-  // SevilMusic recent tracks
-  if (s.enabledSources.sevilmusic) {
-    getRecentSevilMusicTracks(10)
-      .then(tracks => {
-        if (tracks.length) fillTrackRow(sevilRow, tracks);
-        else sevilRow.innerHTML = `<p class="section-error">آهنگی یافت نشد</p>`;
-      })
-      .catch(() => { sevilRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`; });
-  } else {
-    sevilSection.style.display = 'none';
-  }
+  // Music Videos (iTunes — works without crawler)
+  searchItunesVideos('top music video', 20).then(videos => {
+    if (videos.length > 0) {
+      videoRow.innerHTML = '';
+      videos.forEach(v => videoRow.appendChild(renderVideoCard(v)));
+    } else {
+      videoSection.style.display = 'none';
+    }
+  }).catch(() => { videoSection.style.display = 'none'; });
 
-  // Crawler catalog: music videos (only when crawlerApiUrl configured)
+  // Crawler videos (optional, shown only when crawlerApiUrl is set)
   if (s.crawlerApiUrl) {
     crawlerCatalog(s.crawlerApiUrl, { type: 'video' })
       .then(tracks => {
-        if (tracks.length) fillTrackRow(videoRow, tracks);
-        else videoSection.style.display = 'none';
+        if (tracks.length) fillTrackRow(crawlerVideoRow, tracks);
+        else crawlerVideoSection.style.display = 'none';
       })
-      .catch(() => { videoSection.style.display = 'none'; });
+      .catch(() => { crawlerVideoSection.style.display = 'none'; });
   }
 
-  // Trending: ListenBrainz top recordings enriched with JioSaavn audio, fallback to Audius
+  // Artists: upgrade with ListenBrainz real weekly top artists
+  getTopArtists(20).then(lbArtists => {
+    if (!lbArtists.length) return;
+    const fakeTracks: Track[] = lbArtists.map((a, i) => ({
+      id: `lb_a_${i}`, title: '', artist: a.name, album: '',
+      duration: 0, imageUrl: '', audioUrl: '', source: 'musicbrainz' as const,
+    }));
+    fillArtistRow(artistsRow, fakeTracks);
+  }).catch(() => {});
+
+  // Global trending: ListenBrainz top recordings enriched with JioSaavn audio
   void (async () => {
     try {
       const { settings } = store.getState();
@@ -507,13 +610,12 @@ function renderHomeView(): HTMLElement {
         .map(r => r.value);
       if (enriched.length > 0) { fillTrackRow(trendingRow, enriched); return; }
     } catch {}
-    // Fallback to Audius trending
     getTrendingAudius()
       .then(tracks => fillTrackRow(trendingRow, tracks))
       .catch(() => { trendingRow.innerHTML = `<p class="section-error">بارگذاری ناموفق بود</p>`; });
   })();
 
-  // Persian podcasts (CSV from GitHub)
+  // Persian Podcasts
   getPersianPodcasts(20)
     .then(pods => fillPodcastRow(podcastRow, pods))
     .catch(() => {

@@ -1,4 +1,4 @@
-import type { Track } from '../types';
+import type { Track, Album } from '../types';
 
 function artworkUrl(url: string): string {
   return (url || '').replace('100x100bb', '600x600bb');
@@ -37,17 +37,27 @@ function fromItunes(item: ItunesResult, isVideo = false): Track {
   };
 }
 
+function timeoutSignal(ms: number): AbortSignal {
+  // AbortSignal.timeout() not available in all browsers — use AbortController fallback
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), ms);
+  return ctrl.signal;
+}
+
 async function itunesFetch(url: string): Promise<ItunesResult[]> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const res = await fetch(url, { signal: timeoutSignal(12000) });
     if (!res.ok) return [];
     const json = await res.json() as { results?: ItunesResult[] };
     return json.results || [];
   } catch { return []; }
 }
 
+// ─── Public API ────────────────────────────────────────────────────────────
+
 export async function searchItunes(query: string, limit = 25): Promise<Track[]> {
-  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=us&media=music&entity=musicTrack&limit=${limit}`;
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=us&media=music&entity=musicTrack&limit=${limit}&explicit=Yes`;
   const results = await itunesFetch(url);
   return results.filter(i => i.previewUrl).map(i => fromItunes(i));
 }
@@ -58,17 +68,19 @@ export async function searchMusicVideos(query: string, limit = 20): Promise<Trac
   return results.filter(i => i.previewUrl).map(i => fromItunes(i, true));
 }
 
-export async function searchAlbums(query: string, limit = 25): Promise<import('../types').Album[]> {
+export async function searchAlbums(query: string, limit = 25): Promise<Album[]> {
   const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=us&media=music&entity=album&limit=${limit}`;
   const results = await itunesFetch(url);
-  return results.map(item => ({
-    id: `itunes_album_${item.collectionId || 0}`,
-    title: item.collectionName || '',
-    artist: item.artistName || '',
-    imageUrl: artworkUrl(item.artworkUrl100 || ''),
-    genre: item.primaryGenreName,
-    appleId: String(item.collectionId || 0),
-  }));
+  return results
+    .filter(i => i.collectionId)
+    .map(item => ({
+      id: `itunes_album_${item.collectionId}`,
+      title: item.collectionName || '',
+      artist: item.artistName || '',
+      imageUrl: artworkUrl(item.artworkUrl100 || ''),
+      genre: item.primaryGenreName,
+      appleId: String(item.collectionId),
+    }));
 }
 
 export async function lookupByIds(ids: string[]): Promise<Map<string, Track>> {
@@ -76,17 +88,16 @@ export async function lookupByIds(ids: string[]): Promise<Map<string, Track>> {
   if (!ids.length) return map;
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
-  for (const chunk of chunks) {
-    try {
-      const url = `https://itunes.apple.com/lookup?id=${chunk.join(',')}&country=us`;
-      const results = await itunesFetch(url);
-      for (const item of results) {
-        if (item.previewUrl) {
-          const t = fromItunes(item);
-          if (t.appleId) map.set(t.appleId, t);
-        }
+  await Promise.all(chunks.map(async chunk => {
+    const results = await itunesFetch(
+      `https://itunes.apple.com/lookup?id=${chunk.join(',')}&country=us`,
+    );
+    for (const item of results) {
+      if (item.previewUrl) {
+        const t = fromItunes(item);
+        if (t.appleId) map.set(t.appleId, t);
       }
-    } catch {}
-  }
+    }
+  }));
   return map;
 }

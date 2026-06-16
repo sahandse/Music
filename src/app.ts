@@ -302,58 +302,74 @@ async function renderHomeView(): Promise<HTMLElement> {
   const heroEl = renderHero();
   view.appendChild(heroEl);
 
-  const hotSec = renderSection('آهنگ‌های داغ', 'track', () => store.setView('browse'));
-  const newSec = renderSection('جدیدترین آلبوم‌ها', 'album');
-  const vidSec = renderSection('برترین موزیک ویدیوها', 'video', () => store.setView('browse'));
+  const hotSec  = renderSection('آهنگ‌های داغ',         'track', () => store.setView('browse'));
+  const newSec  = renderSection('جدیدترین آلبوم‌ها',    'album');
+  const vidSec  = renderSection('برترین موزیک ویدیوها', 'video', () => store.setView('browse'));
+  const popSec  = renderSection('موزیک پاپ',             'track');
+  const rockSec = renderSection('موزیک راک',             'track');
 
   view.appendChild(hotSec.el);
   view.appendChild(newSec.el);
   view.appendChild(vidSec.el);
+  view.appendChild(popSec.el);
+  view.appendChild(rockSec.el);
 
-  // Load songs: iTunes first (fast + has audioUrl), then RSS chart data on top
-  searchItunes('pop hits 2024', 25).then(quickTracks => {
-    if (quickTracks.length) {
-      heroEl.setTracks(quickTracks.slice(0, 5));
-      hotSec.fill(quickTracks);
+  // All sections load in parallel — first result wins for each slot
+  const songsQueries = ['top songs', 'billboard hot 100', 'best music 2024'];
+  const albumQueries = ['best albums 2024', 'new releases music', 'popular albums'];
+  const videoQueries = ['official music video 2024', 'vevo music video', 'music video'];
+
+  // Hot tracks: try multiple queries until we get results
+  (async () => {
+    for (const q of songsQueries) {
+      const tracks = await searchItunes(q, 25);
+      if (tracks.length) {
+        heroEl.setTracks(tracks.slice(0, 5));
+        hotSec.fill(tracks);
+        break;
+      }
     }
-  });
+  })();
 
+  // RSS charts override iTunes results if available
   getTopSongs(25).then(tracks => {
     if (!tracks.length) return;
-    // RSS tracks may have empty audioUrl — enrich before showing
-    const hasAudio = tracks.some(t => t.audioUrl);
-    if (hasAudio) {
+    if (tracks.some(t => t.audioUrl)) {
       heroEl.setTracks(tracks.slice(0, 5));
       hotSec.fill(tracks);
     } else {
-      // Show artwork immediately, enrich in background
-      hotSec.fill(tracks);
       enrichWithPreviews(tracks, enriched => {
-        heroEl.setTracks(enriched.slice(0, 5));
+        heroEl.setTracks(enriched.filter(t => t.audioUrl).slice(0, 5));
         hotSec.fill(enriched);
       });
     }
   });
 
-  // Load new albums
-  getNewAlbums(20).then(albums => {
-    if (albums.length) newSec.fill(albums);
-  });
-  // Fallback albums if RSS slow
-  searchAlbums('new music 2025', 20).then(albums => {
-    if (albums.length && !newSec.row.querySelector('.album-card')) newSec.fill(albums);
-  });
+  // Albums
+  (async () => {
+    for (const q of albumQueries) {
+      const albums = await searchAlbums(q, 20);
+      if (albums.length) { newSec.fill(albums); break; }
+    }
+  })();
+  getNewAlbums(20).then(albums => { if (albums.length) newSec.fill(albums); });
 
-  // Load top videos: quick fallback then RSS
-  searchMusicVideos('official music video', 16).then(vids => {
-    if (vids.length) vidSec.fill(vids);
-  });
+  // Videos
+  (async () => {
+    for (const q of videoQueries) {
+      const vids = await searchMusicVideos(q, 16);
+      if (vids.length) { vidSec.fill(vids); break; }
+    }
+  })();
   getTopVideos(20).then(tracks => {
     if (!tracks.length) return;
-    const hasAudio = tracks.some(t => t.audioUrl);
-    if (hasAudio) { vidSec.fill(tracks); return; }
+    if (tracks.some(t => t.audioUrl)) { vidSec.fill(tracks); return; }
     enrichWithPreviews(tracks, enriched => vidSec.fill(enriched));
   });
+
+  // Pop & Rock sections (always from iTunes — always have audioUrl)
+  searchItunes('pop music', 20).then(t => { if (t.length) popSec.fill(t); });
+  searchItunes('rock music', 20).then(t => { if (t.length) rockSec.fill(t); });
 
   return view;
 }

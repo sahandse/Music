@@ -1,19 +1,20 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0c0c0e;
-  --bg2: #161618;
-  --bg3: #1c1c1e;
-  --bg4: #2c2c2e;
-  --surface: rgba(255,255,255,0.05);
-  --surface2: rgba(255,255,255,0.09);
-  --border: rgba(255,255,255,0.08);
-  --accent: #ff6b00;
-  --accent-hover: #ff8326;
-  --accent-glow: rgba(255,107,0,0.28);
-  --text: #f5f5f7;
-  --text2: #aeaeb2;
-  --text3: #636366;
+  --bg: #f5f7fb;
+  --bg2: #ffffff;
+  --bg3: #f1f5f9;
+  --bg4: #e7ecf2;
+  --surface: rgba(0,0,0,0.04);
+  --surface2: rgba(0,0,0,0.07);
+  --border: rgba(0,0,0,0.07);
+  --accent: #5b5ff7;
+  --accent-hover: #4449f5;
+  --accent-glow: rgba(91,95,247,0.22);
+  --accent2: #06b6d4;
+  --text: #111827;
+  --text2: #64748b;
+  --text3: #94a3b8;
   --player-h: 88px;
   --sidebar-w: 220px;
   --radius: 12px;
@@ -87,7 +88,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .nav-item:hover { background: var(--surface2); color: var(--text2); }
 
 .nav-item--active {
-  background: rgba(255,107,0,0.12);
+  background: rgba(91,95,247,0.1);
   color: var(--accent);
   font-weight: 600;
 }
@@ -158,9 +159,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   inset: 0;
   background: linear-gradient(
     to top,
-    rgba(12,12,14,0.97) 0%,
-    rgba(12,12,14,0.45) 55%,
-    rgba(12,12,14,0.1) 100%
+    rgba(10,10,20,0.97) 0%,
+    rgba(10,10,20,0.45) 55%,
+    rgba(91,95,247,0.18) 100%
   );
 }
 
@@ -175,7 +176,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .hero-artist {
   font-size: 13px;
   font-weight: 600;
-  color: var(--accent);
+  color: rgba(255,255,255,0.65);
   letter-spacing: 0.5px;
   text-transform: uppercase;
   margin-bottom: 8px;
@@ -266,7 +267,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   height: 56px;
 }
 
-.quick-item:hover { background: rgba(255,255,255,0.15); }
+.quick-item:hover { background: rgba(0,0,0,0.09); }
 
 .quick-item__img {
   width: 56px;
@@ -924,7 +925,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   position: absolute;
   top: 8px;
   right: 8px;
-  background: rgba(255,107,0,0.9);
+  background: rgba(91,95,247,0.9);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -1040,14 +1041,14 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   justify-content: center;
   width: 38px; height: 38px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.08);
-  border: 1.5px solid rgba(255,255,255,0.1);
-  color: #fff;
+  background: rgba(0,0,0,0.05);
+  border: 1.5px solid var(--border);
+  color: var(--text);
   cursor: pointer;
   transition: background 0.2s, transform 0.15s;
   flex-shrink: 0;
 }
-.main-topbar__back:hover { background: rgba(255,255,255,0.16); transform: translateX(-2px); }
+.main-topbar__back:hover { background: rgba(0,0,0,0.1); transform: translateX(-2px); }
 .main-topbar__back svg { width: 20px; height: 20px; }
 .main-topbar__title {
   font-size: 1.1rem;
@@ -1066,10 +1067,11 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   grid-template-columns: minmax(160px, 28%) 1fr minmax(160px, 28%);
   align-items: center;
   padding: 0 20px;
-  background: rgba(22,22,24,0.88);
+  background: rgba(255,255,255,0.92);
   backdrop-filter: blur(28px) saturate(1.4);
   -webkit-backdrop-filter: blur(28px) saturate(1.4);
-  border-top: 1px solid rgba(255,255,255,0.07);
+  border-top: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.06);
   gap: 8px;
   height: var(--player-h);
   z-index: 200;
@@ -1155,7 +1157,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   justify-content: center;
   border: none;
   background: transparent;
-  color: #b3b3b3;
+  color: var(--text2);
   cursor: pointer;
   border-radius: 50%;
   transition: color 0.1s, transform 0.1s;
@@ -1167,7 +1169,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 .pb-btn--sm svg { width: 16px; height: 16px; }
 .pb-btn--md svg { width: 20px; height: 20px; }
 
-.pb-btn:hover { color: #fff; }
+.pb-btn:hover { color: var(--text); }
 .pb-btn:active { transform: scale(0.93); }
 
 /* Active dot under shuffle/repeat */
@@ -1193,15 +1195,16 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   height: 32px;
   border-radius: 50%;
   border: none;
-  background: #fff;
-  color: #000;
+  background: var(--accent);
+  color: #fff;
   cursor: pointer;
   transition: transform 0.1s, background 0.1s;
   flex-shrink: 0;
+  box-shadow: 0 2px 10px var(--accent-glow);
 }
 
 .pb-play svg { width: 14px; height: 14px; }
-.pb-play:hover { transform: scale(1.07); background: #f0f0f0; }
+.pb-play:hover { transform: scale(1.07); background: var(--accent-hover); }
 .pb-play:active { transform: scale(0.95); }
 
 /* Progress bar section */
@@ -1214,7 +1217,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 
 .pb-time {
   font-size: 11px;
-  color: #a7a7a7;
+  color: var(--text3);
   white-space: nowrap;
   min-width: 32px;
   text-align: center;
@@ -1222,7 +1225,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   letter-spacing: 0.02em;
 }
 
-/* Progress slider — Spotify style */
+/* Progress slider — minimal */
 .pb-progress {
   flex: 1;
   -webkit-appearance: none;
@@ -1233,8 +1236,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   cursor: pointer;
   background: linear-gradient(
     to right,
-    #fff var(--val, 0%),
-    #4d4d4d var(--val, 0%)
+    var(--accent) var(--val, 0%),
+    var(--bg4) var(--val, 0%)
   );
   transition: height 0.1s;
 }
@@ -1245,7 +1248,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--accent);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.1s, transform 0.1s;
@@ -1255,7 +1258,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   background: linear-gradient(
     to right,
     var(--accent) var(--val, 0%),
-    #4d4d4d var(--val, 0%)
+    var(--bg4) var(--val, 0%)
   );
 }
 
@@ -1290,8 +1293,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   cursor: pointer;
   background: linear-gradient(
     to right,
-    #fff var(--volume, 70%),
-    #4d4d4d var(--volume, 70%)
+    var(--text3) var(--volume, 70%),
+    var(--bg4) var(--volume, 70%)
   );
 }
 
@@ -1301,7 +1304,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--text);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.1s;
@@ -1313,7 +1316,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   background: linear-gradient(
     to right,
     var(--accent) var(--volume, 70%),
-    #4d4d4d var(--volume, 70%)
+    var(--bg4) var(--volume, 70%)
   );
 }
 
@@ -1321,7 +1324,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--text);
   border: none;
   cursor: pointer;
   opacity: 0;
@@ -1338,13 +1341,13 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   font-weight: 700;
   padding: 3px 7px;
   border-radius: 4px;
-  background: rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.05);
   color: var(--text2);
-  border: 1px solid transparent;
+  border: 1px solid var(--border);
   cursor: pointer;
   transition: all 0.15s;
 }
-.pb-quality-btn:hover { background: rgba(255,255,255,0.14); color: #fff; }
+.pb-quality-btn:hover { background: rgba(0,0,0,0.1); color: var(--text); }
 .pb-quality-btn--active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent-hover); }
 
 /* ── Video Overlay ── */
@@ -1414,11 +1417,12 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   line-height: 1.5;
 }
 .settings-section__desc code {
-  background: rgba(255,255,255,0.07);
+  background: rgba(0,0,0,0.05);
   padding: 1px 5px;
   border-radius: 4px;
   font-family: monospace;
   font-size: 11px;
+  color: var(--accent);
 }
 
 /* ── Lyrics Panel ── */
@@ -1430,14 +1434,14 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   width: min(460px, 100%);
   margin: 0 auto;
   max-height: 55vh;
-  background: #1a1a1a;
-  border: 1px solid #282828;
+  background: var(--bg2);
+  border: 1px solid var(--border);
   border-bottom: none;
   border-radius: 12px 12px 0 0;
   display: flex;
   flex-direction: column;
   z-index: 300;
-  box-shadow: 0 -4px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
 }
 
 .lyrics-panel__header {
@@ -1445,7 +1449,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  border-bottom: 1px solid #282828;
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -1468,7 +1472,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
   white-space: pre-wrap;
   font-size: 14px;
   line-height: 1.9;
-  color: #d4d4d4;
+  color: var(--text2);
   direction: ltr;
   text-align: left;
   flex: 1;
@@ -1624,7 +1628,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); overflow: 
 }
 
 .source-toggle:has(input:checked) {
-  background: rgba(139,92,246,0.1);
+  background: rgba(91,95,247,0.08);
   border-color: var(--accent);
 }
 

@@ -971,7 +971,7 @@ function renderSidebar(activeView: View): HTMLElement {
   const sidebar = el('aside', { class: 'sidebar' });
 
   const logo = el('div', { class: 'sidebar__logo' });
-  logo.innerHTML = `<svg viewBox="0 0 32 32" width="32" height="32"><circle cx="16" cy="16" r="16" fill="#8B5CF6"/><path d="M20 8v12.5a3.5 3.5 0 1 1-2-3.15V10.5l-8 2v10a3.5 3.5 0 1 1-2-3.15V10L20 8z" fill="white"/></svg><span>S Music</span>`;
+  logo.innerHTML = `<svg viewBox="0 0 32 32" width="32" height="32"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#5b5ff7"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient></defs><circle cx="16" cy="16" r="16" fill="url(#lg)"/><path d="M20 8v12.5a3.5 3.5 0 1 1-2-3.15V10.5l-8 2v10a3.5 3.5 0 1 1-2-3.15V10L20 8z" fill="white"/></svg><span>S Music</span>`;
 
   const nav = el('nav', { class: 'sidebar__nav' });
   const navItems: Array<{ view: View; label: string; icon: string }> = [

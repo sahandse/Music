@@ -388,7 +388,10 @@ function renderAlbumCard(album: Album): HTMLElement {
   artWrap.appendChild(img);
   card.appendChild(artWrap);
   card.appendChild(el('div', { class: 'album-card__title' }, album.title));
-  card.appendChild(el('div', { class: 'album-card__artist' }, album.artist));
+  const artistRow = el('div', { class: 'album-card__meta' });
+  artistRow.appendChild(el('span', { class: 'album-card__artist' }, album.artist));
+  if (album.year) artistRow.appendChild(el('span', { class: 'album-card__year' }, String(album.year)));
+  card.appendChild(artistRow);
   card.addEventListener('click', () => {
     if (album.appleId) {
       store.navigateTo({ view: 'album', context: { albumId: album.appleId, albumTitle: album.title, albumArtist: album.artist } });
@@ -647,6 +650,41 @@ function renderLoadMoreBtn(onLoad: (btn: HTMLButtonElement) => Promise<void>): H
   return btn;
 }
 
+// ─── Sort Utilities ────────────────────────────────────────────────────────
+
+type SortKey = 'default' | 'title' | 'artist' | 'duration';
+
+function sortTracks(tracks: Track[], key: SortKey): Track[] {
+  if (key === 'default') return [...tracks];
+  return [...tracks].sort((a, b) => {
+    if (key === 'title')    return a.title.localeCompare(b.title);
+    if (key === 'artist')   return a.artist.localeCompare(b.artist);
+    if (key === 'duration') return (a.duration || 0) - (b.duration || 0);
+    return 0;
+  });
+}
+
+function renderSortBar(onSort: (key: SortKey) => void): HTMLElement {
+  const bar = el('div', { class: 'sort-bar' });
+  const defs: { key: SortKey; label: string }[] = [
+    { key: 'default',  label: 'پیش‌فرض' },
+    { key: 'title',    label: 'عنوان' },
+    { key: 'artist',   label: 'هنرمند' },
+    { key: 'duration', label: 'مدت' },
+  ];
+  const btns: HTMLButtonElement[] = [];
+  defs.forEach(({ key, label }, i) => {
+    const btn = el('button', { class: `sort-btn${i === 0 ? ' active' : ''}` }, label) as HTMLButtonElement;
+    btn.addEventListener('click', () => {
+      btns.forEach((b, bi) => b.classList.toggle('active', bi === i));
+      onSort(key);
+    });
+    bar.appendChild(btn);
+    btns.push(btn);
+  });
+  return bar;
+}
+
 // ─── Radio ────────────────────────────────────────────────────────────────
 
 async function startRadio(query: string): Promise<void> {
@@ -747,17 +785,28 @@ async function renderArtistView(artistName: string): Promise<HTMLElement> {
   // ── Top Tracks ──
   const tracksTitle = el('h2', { class: 'artist-page__section-title' }, 'آهنگ‌های برتر');
   wrap.appendChild(tracksTitle);
+  const sortBarPlaceholder = el('div');
+  wrap.appendChild(sortBarPlaceholder);
   const trackList = el('div', { class: 'track-list' });
   wrap.appendChild(trackList);
 
   let trackOffset = 0;
   const INITIAL_PAGE = 30;
   const LOAD_MORE_PAGE = 20;
+  let allLoadedTracks: Track[] = [];
+  let currentSortKey: SortKey = 'default';
+
+  function rerenderTrackList() {
+    const sorted = sortTracks(allLoadedTracks, currentSortKey);
+    trackList.innerHTML = '';
+    sorted.forEach((t, i) => trackList.appendChild(renderTrackRow(t, i)));
+  }
 
   const loadMoreTracksBtn = renderLoadMoreBtn(async () => {
     trackOffset += LOAD_MORE_PAGE;
     const more = await searchItunes(artistName, LOAD_MORE_PAGE, trackOffset);
-    more.forEach((t, i) => trackList.appendChild(renderTrackRow(t, trackOffset + i)));
+    allLoadedTracks = [...allLoadedTracks, ...more];
+    rerenderTrackList();
     if (more.length < LOAD_MORE_PAGE) loadMoreTracksBtn.remove();
   });
 
@@ -832,7 +881,12 @@ async function renderArtistView(artistName: string): Promise<HTMLElement> {
 
   // Top tracks
   trackOffset = INITIAL_PAGE;
-  artistTracks.slice(0, INITIAL_PAGE).forEach((t, i) => trackList.appendChild(renderTrackRow(t, i)));
+  allLoadedTracks = artistTracks.slice(0, INITIAL_PAGE);
+  sortBarPlaceholder.appendChild(renderSortBar((key) => {
+    currentSortKey = key;
+    rerenderTrackList();
+  }));
+  rerenderTrackList();
   wrap.insertBefore(loadMoreTracksBtn, discoTitle);
 
   // Discography — prefer artist-specific lookup if we have artistId
@@ -926,14 +980,29 @@ async function renderGenreView(initialGenre?: string): Promise<HTMLElement> {
     offset += PAGE;
 
     content.innerHTML = '';
+    let allGenreTracks = [...tracks];
+    let genreSortKey: SortKey = 'default';
+
     const grid = el('div', { class: 'genre-grid' });
-    tracks.forEach(t => grid.appendChild(renderTrackCard(t)));
+
+    function rerenderGenreGrid() {
+      const sorted = sortTracks(allGenreTracks, genreSortKey);
+      grid.innerHTML = '';
+      sorted.forEach(t => grid.appendChild(renderTrackCard(t)));
+    }
+
+    content.appendChild(renderSortBar((key) => {
+      genreSortKey = key;
+      rerenderGenreGrid();
+    }));
+    rerenderGenreGrid();
     content.appendChild(grid);
 
     const loadMoreBtn = renderLoadMoreBtn(async () => {
       const more = await searchItunes(query, PAGE, offset);
       offset += PAGE;
-      more.forEach(t => grid.appendChild(renderTrackCard(t)));
+      allGenreTracks = [...allGenreTracks, ...more];
+      rerenderGenreGrid();
     });
     content.appendChild(loadMoreBtn);
   }

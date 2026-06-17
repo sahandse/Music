@@ -218,7 +218,7 @@ function showTrackDetails(track: Track): void {
     ['ژانر', track.genre || '—'],
     ['مدت زمان', track.duration ? fmt(track.duration) : '—'],
     ['سال', track.year ? String(track.year) : '—'],
-    ['منبع', track.source === 'itunes' ? 'iTunes' : 'Apple Music'],
+    ['منبع', track.source === 'itunes' ? 'آیتونز' : 'اپل موزیک'],
   ];
 
   const table = el('div', { class: 'track-details-table' });
@@ -358,7 +358,7 @@ function renderVideoCard(track: Track, onClick?: () => void): HTMLElement {
   const card = el('div', { class: 'video-card' });
   const artWrap = el('div', { class: 'video-card__art' });
   const img = el('img', { class: 'video-card__img', src: art(track.imageUrl, 300), alt: track.title, loading: 'lazy' });
-  const badge = el('div', { class: 'video-card__badge' }, 'MV');
+  const badge = el('div', { class: 'video-card__badge' }, 'ویدیو');
   const overlay = el('div', { class: 'video-card__play-overlay' });
   overlay.innerHTML = ico.videoPlay;
   artWrap.appendChild(img);
@@ -555,7 +555,7 @@ function renderHero(): HeroEl {
     idx = (i + tracks.length) % tracks.length;
     const t = tracks[idx];
     bgImg.src = art(t.imageUrl, 600);
-    genre.textContent = t.genre || 'Apple Music';
+    genre.textContent = t.genre || 'موسیقی';
     title.textContent = t.title;
     artist.textContent = t.artist;
     playBtn.onclick = () => { if (t.audioUrl) player.playTrack(t); };

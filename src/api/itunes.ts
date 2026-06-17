@@ -1,5 +1,12 @@
 import type { Track, Album } from '../types';
 
+export interface ArtistInfo {
+  artistId: number;
+  artistName: string;
+  primaryGenreName?: string;
+  artistLinkUrl?: string;
+}
+
 function artworkUrl(url: string): string {
   return (url || '').replace('100x100bb', '600x600bb');
 }
@@ -19,6 +26,7 @@ interface ItunesResult {
   primaryGenreName?: string;
   releaseDate?: string;
   trackNumber?: number;
+  artistLinkUrl?: string;
 }
 
 function fromItunes(item: ItunesResult, isVideo = false): Track {
@@ -113,4 +121,38 @@ export async function getAlbumTracks(albumId: string): Promise<{ collection: Itu
     .sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0))
     .map(r => fromItunes(r));
   return { collection, tracks };
+}
+
+export async function searchArtistEntity(artistName: string): Promise<ArtistInfo | null> {
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=musicArtist&limit=5&country=us`;
+  const results = await itunesFetch(url);
+  const match = results.find(r => r.wrapperType === 'artist' && r.artistName);
+  if (!match) return null;
+  return {
+    artistId: match.artistId || 0,
+    artistName: match.artistName || artistName,
+    primaryGenreName: match.primaryGenreName,
+    artistLinkUrl: (match as Record<string, unknown>)['artistLinkUrl'] as string | undefined,
+  };
+}
+
+export async function getArtistAlbumsByArtistId(artistId: number): Promise<Album[]> {
+  const url = `https://itunes.apple.com/lookup?id=${artistId}&entity=album&limit=50&country=us`;
+  const results = await itunesFetch(url);
+  return results
+    .filter(r => r.wrapperType === 'collection' && r.collectionId)
+    .sort((a, b) => {
+      const da = a.releaseDate ? new Date(a.releaseDate).getFullYear() : 0;
+      const db = b.releaseDate ? new Date(b.releaseDate).getFullYear() : 0;
+      return db - da;
+    })
+    .map(item => ({
+      id: `itunes_album_${item.collectionId}`,
+      title: item.collectionName || '',
+      artist: item.artistName || '',
+      imageUrl: artworkUrl(item.artworkUrl100 || ''),
+      genre: item.primaryGenreName,
+      year: item.releaseDate ? new Date(item.releaseDate).getFullYear() : undefined,
+      appleId: String(item.collectionId),
+    }));
 }

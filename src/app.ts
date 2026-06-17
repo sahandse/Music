@@ -1,7 +1,7 @@
 import { store } from './store';
 import { player } from './player';
 import { getTopSongs, getNewAlbums, getTopVideos } from './api/apple-charts';
-import { searchItunes, searchMusicVideos, searchAlbums, lookupByIds, getAlbumTracks } from './api/itunes';
+import { searchItunes, searchMusicVideos, searchAlbums, lookupByIds, getAlbumTracks, searchArtistEntity, getArtistAlbumsByArtistId } from './api/itunes';
 import { getSyncedLyrics } from './api/lrclib';
 import type { LyricLine } from './api/lrclib';
 import type { Track, Album, View, PlayerState, NavEntry, Playlist } from './types';
@@ -96,6 +96,33 @@ function skeletonCards(n = 6): HTMLElement[] {
     c.appendChild(img); c.appendChild(l1); c.appendChild(l2);
     return c;
   });
+}
+
+// ─── Wikipedia Bio Fetcher ────────────────────────────────────────────────
+
+async function fetchWikipediaBio(artistName: string): Promise<{ extract: string; thumbnail?: string; url?: string } | null> {
+  try {
+    const encoded = encodeURIComponent(artistName.replace(/ /g, '_'));
+    // Try English Wikipedia first
+    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`, {
+      signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(8000) : (() => { const c = new AbortController(); setTimeout(() => c.abort(), 8000); return c.signal; })()
+    });
+    if (!res.ok) throw new Error('not found');
+    const data = await res.json() as {
+      extract?: string;
+      thumbnail?: { source?: string };
+      content_urls?: { desktop?: { page?: string } };
+      type?: string;
+    };
+    if (!data.extract || data.type === 'disambiguation') return null;
+    return {
+      extract: data.extract,
+      thumbnail: data.thumbnail?.source,
+      url: data.content_urls?.desktop?.page,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────
@@ -682,36 +709,44 @@ async function renderAlbumView(albumId: string, albumTitle: string, albumArtist:
 
 async function renderArtistView(artistName: string): Promise<HTMLElement> {
   const view = el('div', { class: 'view' });
-  const wrap = el('div', { style: 'padding:20px' });
+  const wrap = el('div', { class: 'artist-page-wrap' });
   view.appendChild(wrap);
 
   if (store.canGoBack()) wrap.appendChild(renderBackButton());
 
-  // Artist hero
-  const artistHero = el('div', { class: 'artist-hero' });
-  const artistHeroImg = el('img', { class: 'artist-hero__img', src: '', alt: artistName });
-  const artistHeroInfo = el('div', { class: 'artist-hero__info' });
-  const artistHeroName = el('h1', { class: 'artist-hero__name' }, artistName);
-  const artistHeroMeta = el('div', { class: 'artist-hero__meta' });
-
-  // Radio button
+  // ── Hero ──
+  const hero = el('div', { class: 'artist-hero' });
+  const heroImg = el('img', { class: 'artist-hero__img', src: '', alt: artistName }) as HTMLImageElement;
+  const heroInfo = el('div', { class: 'artist-hero__info' });
+  const heroName = el('h1', { class: 'artist-hero__name' }, artistName);
+  const heroMeta = el('div', { class: 'artist-hero__meta' }, '');
+  const heroBtns = el('div', { class: 'artist-hero__btns' });
   const radioBtn = el('button', { class: 'artist-radio-btn' });
   radioBtn.innerHTML = `${ico.radio} رادیو`;
-  radioBtn.addEventListener('click', () => {
-    startRadio(artistName).catch(() => {});
-  });
+  radioBtn.addEventListener('click', () => startRadio(artistName).catch(() => {}));
+  heroBtns.appendChild(radioBtn);
+  heroInfo.appendChild(heroName);
+  heroInfo.appendChild(heroMeta);
+  heroInfo.appendChild(heroBtns);
+  hero.appendChild(heroImg);
+  hero.appendChild(heroInfo);
+  wrap.appendChild(hero);
 
-  artistHeroInfo.appendChild(artistHeroName);
-  artistHeroInfo.appendChild(artistHeroMeta);
-  artistHeroInfo.appendChild(radioBtn);
-  artistHero.appendChild(artistHeroImg);
-  artistHero.appendChild(artistHeroInfo);
-  wrap.appendChild(artistHero);
+  // ── Stats Cards (placeholder) ──
+  const statsRow = el('div', { class: 'artist-stats-row' });
+  wrap.appendChild(statsRow);
 
-  // Top tracks section
+  // ── Bio Section ──
+  const bioSection = el('div', { class: 'artist-bio-section' });
+  const bioText = el('p', { class: 'artist-bio-text' }, '');
+  const bioLoading = el('div', { class: 'artist-bio-loading skeleton', style: 'height:80px;border-radius:10px;margin-bottom:8px' });
+  bioSection.appendChild(bioLoading);
+  bioSection.appendChild(bioText);
+  wrap.appendChild(bioSection);
+
+  // ── Top Tracks ──
   const tracksTitle = el('h2', { class: 'artist-page__section-title' }, 'آهنگ‌های برتر');
   wrap.appendChild(tracksTitle);
-
   const trackList = el('div', { class: 'track-list' });
   wrap.appendChild(trackList);
 
@@ -726,17 +761,26 @@ async function renderArtistView(artistName: string): Promise<HTMLElement> {
     if (more.length < LOAD_MORE_PAGE) loadMoreTracksBtn.remove();
   });
 
-  // Albums section
-  const albumsTitle = el('h2', { class: 'artist-page__section-title', style: 'margin-top:28px' }, 'آلبوم‌ها');
-  wrap.appendChild(albumsTitle);
+  // ── Discography ──
+  const discoTitle = el('h2', { class: 'artist-page__section-title', style: 'margin-top:32px' }, 'دیسکوگرافی');
+  wrap.appendChild(discoTitle);
   const albumRow = el('div', { class: 'scroll-row' });
   skeletonCards(4).forEach(s => albumRow.appendChild(s));
   wrap.appendChild(albumRow);
 
-  // Load data
-  const [tracks, albums] = await Promise.all([
+  // ── Similar Artists ──
+  const similarTitle = el('h2', { class: 'artist-page__section-title', style: 'margin-top:32px' }, 'هنرمندان مشابه');
+  wrap.appendChild(similarTitle);
+  const similarRow = el('div', { class: 'scroll-row' });
+  skeletonCards(4).forEach(s => similarRow.appendChild(s));
+  wrap.appendChild(similarRow);
+
+  // ── Load all data in parallel ──
+  const [tracks, albums, artistInfo, bio] = await Promise.all([
     searchItunes(artistName, 50),
     searchAlbums(artistName, 25),
+    searchArtistEntity(artistName),
+    fetchWikipediaBio(artistName),
   ]);
 
   // Filter tracks to matching artist
@@ -744,32 +788,89 @@ async function renderArtistView(artistName: string): Promise<HTMLElement> {
   let artistTracks = tracks.filter(t => t.artist.toLowerCase().includes(prefix));
   if (!artistTracks.length) artistTracks = tracks;
 
-  // Update hero with first track image
-  if (artistTracks.length > 0 && artistTracks[0].imageUrl) {
-    artistHeroImg.src = art(artistTracks[0].imageUrl, 600);
+  // Hero image
+  if (bio?.thumbnail) {
+    heroImg.src = bio.thumbnail;
+    heroImg.style.objectPosition = 'top';
+  } else if (artistTracks.length > 0) {
+    heroImg.src = art(artistTracks[0].imageUrl, 600);
   }
 
-  // Update meta
-  const genre = artistTracks[0]?.genre;
-  artistHeroMeta.textContent = `${artistTracks.length} آهنگ${genre ? ' • ' + genre : ''}`;
+  // Hero meta
+  const genre = artistInfo?.primaryGenreName || artistTracks[0]?.genre || '';
+  heroMeta.textContent = [
+    artistTracks.length ? `${artistTracks.length}+ آهنگ` : '',
+    albums.length ? `${albums.length} آلبوم` : '',
+    genre,
+  ].filter(Boolean).join(' • ');
 
-  trackOffset = INITIAL_PAGE;
-  const firstPage = artistTracks.slice(0, INITIAL_PAGE);
-  firstPage.forEach((t, i) => trackList.appendChild(renderTrackRow(t, i)));
-  wrap.insertBefore(loadMoreTracksBtn, albumsTitle);
+  // Stats cards
+  statsRow.innerHTML = '';
+  const statCards: [string, string][] = [
+    ['آهنگ‌ها', `${artistTracks.length}+`],
+    ['آلبوم‌ها', String(albums.length || '—')],
+    ['ژانر', genre || '—'],
+  ];
+  statCards.forEach(([label, value]) => {
+    const card = el('div', { class: 'artist-stat-card' });
+    card.appendChild(el('div', { class: 'artist-stat-value' }, value));
+    card.appendChild(el('div', { class: 'artist-stat-label' }, label));
+    statsRow.appendChild(card);
+  });
 
-  // Sort albums by releaseDate desc
-  albumRow.innerHTML = '';
-  if (albums.length) {
-    const sortedAlbums = [...albums].sort((a, b) => {
-      const da = a.year || 0;
-      const db = b.year || 0;
-      return db - da;
-    });
-    sortedAlbums.forEach(a => albumRow.appendChild(renderAlbumCard(a)));
+  // Bio
+  bioLoading.remove();
+  if (bio?.extract) {
+    bioText.textContent = bio.extract;
+    if (bio.url) {
+      const link = el('a', { class: 'artist-bio-link', href: bio.url, target: '_blank', rel: 'noopener' }, 'ادامه در ویکیپدیا ↗');
+      bioSection.appendChild(link);
+    }
   } else {
-    albumRow.appendChild(el('div', { style: 'color:var(--text3);padding:20px;font-size:13px' }, 'بدون نتیجه'));
+    bioSection.style.display = 'none';
   }
+
+  // Top tracks
+  trackOffset = INITIAL_PAGE;
+  artistTracks.slice(0, INITIAL_PAGE).forEach((t, i) => trackList.appendChild(renderTrackRow(t, i)));
+  wrap.insertBefore(loadMoreTracksBtn, discoTitle);
+
+  // Discography — prefer artist-specific lookup if we have artistId
+  albumRow.innerHTML = '';
+  let finalAlbums = albums;
+  if (artistInfo?.artistId) {
+    try {
+      const byId = await getArtistAlbumsByArtistId(artistInfo.artistId);
+      if (byId.length) finalAlbums = byId;
+    } catch { /* use search results */ }
+  }
+  if (finalAlbums.length) {
+    finalAlbums.forEach(a => albumRow.appendChild(renderAlbumCard(a)));
+  } else {
+    albumRow.appendChild(el('div', { style: 'color:var(--text2);padding:20px;font-size:13px' }, 'بدون نتیجه'));
+  }
+
+  // Similar artists — search by genre
+  similarRow.innerHTML = '';
+  const simQuery = genre ? `${genre} music` : artistName;
+  searchItunes(simQuery, 40).then(simTracks => {
+    const seen = new Set<string>();
+    seen.add(artistName.toLowerCase());
+    const simArtists: { name: string; imageUrl: string }[] = [];
+    for (const t of simTracks) {
+      const lower = t.artist.toLowerCase();
+      if (!seen.has(lower) && t.artist) {
+        seen.add(lower);
+        simArtists.push({ name: t.artist, imageUrl: t.imageUrl });
+      }
+    }
+    similarRow.innerHTML = '';
+    if (simArtists.length) {
+      simArtists.slice(0, 15).forEach(a => similarRow.appendChild(renderArtistCard(a.name, a.imageUrl)));
+    } else {
+      similarRow.appendChild(el('div', { style: 'color:var(--text2);padding:20px;font-size:13px' }, 'بدون نتیجه'));
+    }
+  });
 
   return view;
 }

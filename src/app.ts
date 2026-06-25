@@ -2,6 +2,8 @@ import { store } from './store';
 import { player } from './player';
 import { getTopSongs, getNewAlbums, getTopVideos } from './api/apple-charts';
 import { searchItunes, searchMusicVideos, searchAlbums, lookupByIds, getAlbumTracks, searchArtistEntity, getArtistAlbumsByArtistId } from './api/itunes';
+import { searchDeezer } from './api/deezer';
+import { searchDailymotionVideos } from './api/dailymotion';
 import { getSyncedLyrics } from './api/lrclib';
 import type { LyricLine } from './api/lrclib';
 import type { Track, Album, View, PlayerState, NavEntry, Playlist } from './types';
@@ -218,7 +220,7 @@ function showTrackDetails(track: Track): void {
     ['ژانر', track.genre || '—'],
     ['مدت زمان', track.duration ? fmt(track.duration) : '—'],
     ['سال', track.year ? String(track.year) : '—'],
-    ['منبع', track.source === 'itunes' ? 'آیتونز' : 'اپل موزیک'],
+    ['منبع', track.source === 'deezer' ? 'دیزر' : track.source === 'dailymotion' ? 'دیلی موشن' : track.source === 'apple' ? 'اپل موزیک' : 'آیتونز'],
   ];
 
   const table = el('div', { class: 'track-details-table' });
@@ -597,10 +599,27 @@ let videoOverlayEl: HTMLElement | null = null;
 function openVideoOverlay(track: Track): void {
   if (!videoOverlayEl) return;
   const titleEl = videoOverlayEl.querySelector('.video-overlay__title') as HTMLElement;
-  const videoEl = videoOverlayEl.querySelector('video') as HTMLVideoElement;
-  titleEl.textContent = `${track.title} — ${track.artist}`;
-  videoEl.src = track.videoUrl || track.audioUrl;
-  videoEl.play().catch(() => {});
+  const playerWrap = videoOverlayEl.querySelector('.video-overlay__player') as HTMLElement;
+
+  titleEl.textContent = `${track.title}${track.artist ? ` — ${track.artist}` : ''}`;
+  playerWrap.innerHTML = '';
+
+  const src = track.videoUrl || track.audioUrl;
+  if (src.includes('dailymotion.com/embed') || src.includes('youtube.com/embed')) {
+    const iframe = document.createElement('iframe');
+    iframe.src = src;
+    iframe.setAttribute('allowfullscreen', '');
+    iframe.setAttribute('allow', 'autoplay; fullscreen');
+    playerWrap.appendChild(iframe);
+  } else {
+    const vid = document.createElement('video');
+    vid.src = src;
+    vid.controls = true;
+    vid.setAttribute('playsinline', '');
+    playerWrap.appendChild(vid);
+    vid.play().catch(() => {});
+  }
+
   videoOverlayEl.classList.add('open');
 }
 
@@ -611,11 +630,11 @@ function buildVideoOverlay(): HTMLElement {
   const titleEl = el('span', { class: 'video-overlay__title' });
   bar.appendChild(closeBtn);
   bar.appendChild(titleEl);
-  const vid = el('video', { controls: '', playsinline: '' });
+  const playerWrap = el('div', { class: 'video-overlay__player' });
   overlay.appendChild(bar);
-  overlay.appendChild(vid);
+  overlay.appendChild(playerWrap);
   closeBtn.addEventListener('click', () => {
-    vid.pause(); vid.src = '';
+    playerWrap.innerHTML = '';
     overlay.classList.remove('open');
   });
   videoOverlayEl = overlay;
@@ -1121,11 +1140,15 @@ async function renderHomeView(): Promise<HTMLElement> {
   const heroEl = renderHero();
   view.appendChild(heroEl);
 
-  const hotSec     = renderSection('داغ‌ترین آهنگ‌ها',      'track', () => store.navigateTo({ view: 'genre', context: { genre: 'پاپ' } }));
-  const newSec     = renderSection('جدیدترین آلبوم‌ها',     'album', () => store.setView('browse'));
-  const vidSec     = renderSection('برترین موزیک ویدیوها',  'video', () => store.setView('browse'));
-  const vidSec2    = renderSection('موزیک ویدیوهای جدید',   'video', () => store.navigateTo({ view: 'browse' }));
-  const persianSec2 = renderSection('موزیک ایرانی 🇮🇷',     'track', () => store.navigateTo({ view: 'genre', context: { genre: 'ایرانی' } }));
+  const hotSec      = renderSection('داغ‌ترین آهنگ‌ها',        'track', () => store.navigateTo({ view: 'genre', context: { genre: 'پاپ' } }));
+  const newSec      = renderSection('جدیدترین آلبوم‌ها',       'album', () => store.setView('browse'));
+  const vidSec      = renderSection('برترین موزیک ویدیوها',    'video', () => store.setView('browse'));
+  const vidSec2     = renderSection('موزیک ویدیوهای جدید',     'video', () => store.navigateTo({ view: 'browse' }));
+  const dmVidSec    = renderSection('ویدیوهای دیلی‌موشن',      'video', () => store.navigateTo({ view: 'browse' }));
+  const dmVidSec2   = renderSection('ویدیوهای موزیک ایرانی',   'video', () => store.navigateTo({ view: 'browse' }));
+  const persianSec2 = renderSection('موزیک ایرانی 🇮🇷',        'track', () => store.navigateTo({ view: 'genre', context: { genre: 'ایرانی' } }));
+  const deezerSec   = renderSection('پیشنهاد دیزر',             'track', () => store.navigateTo({ view: 'genre', context: { genre: 'پاپ' } }));
+  const deezerIranSec = renderSection('موزیک ایرانی — دیزر',   'track', () => store.navigateTo({ view: 'genre', context: { genre: 'ایرانی' } }));
   const popSec     = renderSection('پاپ برتر',              'track', () => store.navigateTo({ view: 'genre', context: { genre: 'پاپ' } }));
   const rockSec    = renderSection('راک',                   'track', () => store.navigateTo({ view: 'genre', context: { genre: 'راک' } }));
   const hipSec     = renderSection('هیپ‌هاپ',               'track', () => store.navigateTo({ view: 'genre', context: { genre: 'هیپ‌هاپ' } }));
@@ -1143,7 +1166,11 @@ async function renderHomeView(): Promise<HTMLElement> {
   view.appendChild(newSec.el);
   view.appendChild(vidSec.el);
   view.appendChild(vidSec2.el);
+  view.appendChild(dmVidSec.el);
+  view.appendChild(dmVidSec2.el);
   view.appendChild(persianSec2.el);
+  view.appendChild(deezerIranSec.el);
+  view.appendChild(deezerSec.el);
 
   // Artists section
   const artistsSec = el('div', { class: 'section' });
@@ -1219,8 +1246,15 @@ async function renderHomeView(): Promise<HTMLElement> {
     enrichWithPreviews(tracks, enriched => vidSec.fill(enriched));
   });
 
-  // Second video section
+  // Second iTunes video section
   searchMusicVideos('new music video 2024', 20).then(v => { if (v.length) vidSec2.fill(v); });
+
+  // Dailymotion video sections
+  searchDailymotionVideos('official music video 2024', 16).then(v => { if (v.length) dmVidSec.fill(v); });
+  searchDailymotionVideos('موزیک ایرانی کلیپ', 16).then(v => {
+    if (v.length) { dmVidSec2.fill(v); return; }
+    searchDailymotionVideos('iranian music video', 16).then(v2 => { if (v2.length) dmVidSec2.fill(v2); });
+  });
 
   // Genre sections
   searchItunes('pop music', 20).then(t => { if (t.length) popSec.fill(t); });
@@ -1259,22 +1293,37 @@ async function renderHomeView(): Promise<HTMLElement> {
     }
   });
 
-  // Persian music section
+  // Persian music section — try iTunes + Deezer in parallel, pick best
   (async () => {
-    const persianQueries = [
-      () => searchItunes('persian pop', 20),
-      () => searchItunes('iranian music', 20),
-      () => searchItunes('ایرانی', 20),
-      () => searchItunes('googoosh', 10),
-    ];
-    for (const queryFn of persianQueries) {
-      const tracks = await queryFn();
-      if (tracks.length) {
-        persianSec2.fill(tracks);
-        return;
-      }
+    const [itunesTracks, deezerTracks] = await Promise.all([
+      (async () => {
+        for (const q of ['persian pop', 'iranian music', 'ایرانی', 'googoosh', 'ebi iranian']) {
+          const t = await searchItunes(q, 20);
+          if (t.length) return t;
+        }
+        return [] as Track[];
+      })(),
+      (async () => {
+        for (const q of ['persian pop', 'iranian music', 'googoosh', 'dariush iranian', 'ebi singer']) {
+          const t = await searchDeezer(q, 20);
+          if (t.length) return t;
+        }
+        return [] as Track[];
+      })(),
+    ]);
+    const best = itunesTracks.length >= deezerTracks.length ? itunesTracks : deezerTracks;
+    persianSec2.fill(best);
+    // Deezer-specific Iranian section gets the other source
+    const deezerIranTracks = deezerTracks.length ? deezerTracks : itunesTracks;
+    deezerIranSec.fill(deezerIranTracks);
+  })();
+
+  // Deezer global music section
+  (async () => {
+    for (const q of ['top hits 2024', 'billboard hot', 'best pop 2024', 'summer hits']) {
+      const t = await searchDeezer(q, 25);
+      if (t.length) { deezerSec.fill(t); return; }
     }
-    persianSec2.fill([]);
   })();
 
   return view;
@@ -1299,17 +1348,24 @@ async function renderBrowseView(): Promise<HTMLElement> {
   let topLoaded: Track[] = [];
   let newLoaded: Album[] = [];
 
-  // Video tab state
-  const vidQueries = ['official music video 2024', 'music video vevo', 'new music video'];
+  // Video tab state — mixed iTunes + Dailymotion
+  const itunesVidQueries = ['official music video 2024', 'music video vevo', 'new music video', 'pop music video'];
+  const dmVidQueries = ['official music video', 'music video 2024', 'vevo music video', 'pop music video clip'];
+  let itunesVidPage = 0;
+  let dmVidPage = 1;
   let vidAllLoaded: Track[] = [];
   let vidGridEl: HTMLElement | null = null;
 
   async function loadMoreVideos(): Promise<void> {
-    const offset = vidAllLoaded.length;
-    const q = vidQueries[Math.floor(offset / 20) % vidQueries.length];
-    const more = await searchMusicVideos(q, 20);
     const seen = new Set(vidAllLoaded.map(t => t.id));
-    const fresh = more.filter(t => !seen.has(t.id));
+    // alternate between iTunes and Dailymotion on each load-more
+    const [itunesMore, dmMore] = await Promise.all([
+      searchMusicVideos(itunesVidQueries[itunesVidPage % itunesVidQueries.length], 12),
+      searchDailymotionVideos(dmVidQueries[dmVidPage % dmVidQueries.length], 12, dmVidPage),
+    ]);
+    itunesVidPage++;
+    dmVidPage++;
+    const fresh = [...itunesMore, ...dmMore].filter(t => !seen.has(t.id));
     vidAllLoaded = [...vidAllLoaded, ...fresh];
     if (vidGridEl) fresh.forEach(t => vidGridEl!.appendChild(renderVideoCard(t)));
   }
@@ -1485,7 +1541,15 @@ function renderSearchView(): HTMLElement {
         store.setSearchResults(q, songs);
       }
     } else if (activeSearchTab === 'videos') {
-      const vids = await searchMusicVideos(q, 20);
+      const [itunesVids, dmVids] = await Promise.all([
+        searchMusicVideos(q, 15),
+        searchDailymotionVideos(q, 12),
+      ]);
+      const seen = new Set<string>();
+      const vids: Track[] = [];
+      for (const t of [...itunesVids, ...dmVids]) {
+        if (!seen.has(t.id)) { seen.add(t.id); vids.push(t); }
+      }
       resultsWrap.innerHTML = '';
       if (!vids.length) {
         resultsWrap.appendChild(el('div', { class: 'search-empty' }, 'نتیجه‌ای پیدا نشد'));

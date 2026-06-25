@@ -522,7 +522,9 @@ input, textarea { font-family: inherit; }
 }
 .video-overlay__close { color: #fff; font-size: 14px; font-weight: 600; }
 .video-overlay__title { color: #fff; font-size: 14px; font-weight: 600; }
-.video-overlay video { width: 100%; height: 100%; object-fit: contain; }
+.video-overlay__player { flex: 1; position: relative; overflow: hidden; background: #000; }
+.video-overlay__player video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.video-overlay__player iframe { width: 100%; height: 100%; border: none; display: block; }
 
 /* ─── Back Button ─────────────────────────────────────────────────────────── */
 .back-btn {

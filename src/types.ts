@@ -1,4 +1,4 @@
-export type Source = 'itunes' | 'apple';
+export type Source = 'itunes' | 'apple' | 'deezer' | 'dailymotion';
 export type Theme = 'dark' | 'light';
 export type View = 'home' | 'browse' | 'search' | 'library' | 'artist' | 'genre' | 'persian' | 'album' | 'playlists';
 export type RepeatMode = 'none' | 'one' | 'all';

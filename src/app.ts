@@ -1876,14 +1876,18 @@ function renderNowPlaying(): HTMLElement {
 
   let syncedLines: LyricLine[] = [];
   let lastLyricIdx = -1;
+  let lastLyricsTrackId: string | null = null;
 
-  lyricsBtn.addEventListener('click', async () => {
-    lyricsPanel.classList.add('open');
+  async function loadLyrics(): Promise<void> {
     const t = store.getState().player.currentTrack;
     if (!t) return;
+    lastLyricsTrackId = t.id;
     lyricsBody.innerHTML = '<div class="lyrics-status">در حال بارگذاری...</div>';
     syncedLines = [];
+    lastLyricIdx = -1;
     const result = await getSyncedLyrics(t.artist, t.title, t.duration || undefined);
+    // Track may have changed again while the request was in flight
+    if (store.getState().player.currentTrack?.id !== t.id) return;
     lyricsBody.innerHTML = '';
     if (!result) {
       lyricsBody.appendChild(el('div', { class: 'lyrics-status' }, 'متن آهنگ پیدا نشد'));
@@ -1902,6 +1906,11 @@ function renderNowPlaying(): HTMLElement {
         lyricsBody.appendChild(lineEl);
       });
     }
+  }
+
+  lyricsBtn.addEventListener('click', () => {
+    lyricsPanel.classList.add('open');
+    loadLyrics();
   });
 
   // Queue Panel
@@ -1951,6 +1960,10 @@ function renderNowPlaying(): HTMLElement {
       const liked = store.isFavorite(ps.currentTrack.id);
       heartBtn.innerHTML = liked ? ico.heart : ico.heartOut;
       heartBtn.classList.toggle('liked', liked);
+
+      if (lyricsPanel.classList.contains('open') && ps.currentTrack.id !== lastLyricsTrackId) {
+        loadLyrics();
+      }
     }
     artImg.classList.toggle('playing', ps.isPlaying);
     playBtn.innerHTML = ps.isPlaying ? ico.pause : ico.play;
